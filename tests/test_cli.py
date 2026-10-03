@@ -1,10 +1,13 @@
 """Typer CLI tests."""
 
+import json
 from pathlib import Path
 
 from typer.testing import CliRunner
 
+import lowvram.cli
 from lowvram.cli import app
+from lowvram.models.hardware import HardwareInfo
 
 FIXTURES = Path(__file__).parent / "fixtures"
 runner = CliRunner()
@@ -13,7 +16,46 @@ runner = CliRunner()
 def test_help_starts() -> None:
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
+    assert "system" in result.stdout
     assert "validate" in result.stdout
+
+
+def test_system_outputs_structured_json(monkeypatch) -> None:
+    hardware = HardwareInfo.model_validate(
+        {
+            "cpu": {
+                "name": "Example CPU",
+                "architecture": "x86_64",
+                "physical_cores": 8,
+                "logical_cores": 16,
+            },
+            "gpu": [
+                {
+                    "vendor": "nvidia",
+                    "name": "NVIDIA GeForce RTX 4060",
+                    "vram_total_mb": 8192,
+                    "driver_version": "555.42",
+                    "cuda_version": "12.5",
+                }
+            ],
+            "ram_total_mb": 32768,
+            "os": {"name": "Linux", "version": "6.8", "architecture": "x86_64"},
+            "driver": {
+                "nvidia_driver_version": "555.42",
+                "cuda_version": "12.5",
+            },
+            "python_version": "3.11.9",
+        }
+    )
+    monkeypatch.setattr(lowvram.cli, "collect_system", lambda: hardware)
+
+    result = runner.invoke(app, ["system"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["cpu"]["name"] == "Example CPU"
+    assert payload["gpu"][0]["vram_total_mb"] == 8192
+    assert payload["driver"]["cuda_version"] == "12.5"
 
 
 def test_validate_valid_file() -> None:

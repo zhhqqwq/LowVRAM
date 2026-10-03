@@ -5,7 +5,7 @@ on:
   pull_request:
 
 jobs:
-  p0-quality-gate:
+  quality-gate:
     runs-on: ubuntu-latest
     strategy:
       matrix:
