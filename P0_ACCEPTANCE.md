@@ -34,14 +34,19 @@ This report checks only **P0 — Foundation**. No P1/P2/P3 functionality is acce
 | Draft 2020-12 schema validity | PASS | Covered by automated tests using `Draft202012Validator.check_schema`. |
 | `python -m compileall -q lowvram scripts` | PASS | No syntax/bytecode compilation errors. |
 | Wheel build/install smoke test | PASS | Wheel builds; installed CLI validates a benchmark when runtime dependencies are made available. |
-| `ruff check .` | BLOCKED BY ENVIRONMENT | `ruff` is not installed and the sandbox cannot download it. |
-| `mypy` | BLOCKED BY ENVIRONMENT | `mypy` is not installed and the sandbox cannot download it. |
+| `ruff check .` | PASS IN CI | GitHub Actions run #3 passed on Python 3.11, 3.12, and 3.13. |
+| `mypy` | PASS IN CI | GitHub Actions run #3 passed on Python 3.11, 3.12, and 3.13. |
 
 ## Gate status
 
-**P0 implementation: delivered.**
+**P0 Gate: PASS.**
 
-**P0 Gate certification: pending CI**, because the project specification requires Ruff and mypy to pass and those two tools cannot be executed in the offline sandbox. The checked-in GitHub Actions workflow makes both mandatory before the Gate should be marked PASS.
+GitHub Actions run #3 (`37120213204`) passed the full P0 quality gate on Python 3.11, 3.12, and 3.13. Each matrix job passed install, Ruff, mypy, pytest, checked-in data validation, fixture validation, and generated-schema drift verification.
+
+The CI fixes required during remote acceptance were:
+
+- split one 103-character schema-export line to satisfy the configured 100-character Ruff limit;
+- add `types-jsonschema` to development dependencies so strict mypy has stubs for `jsonschema`.
 
 ## Scope audit
 
