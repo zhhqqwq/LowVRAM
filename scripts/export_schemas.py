@@ -23,7 +23,8 @@ def export_schema(name: str, model: type[BaseModel]) -> None:
     schema: dict[str, Any] = model.model_json_schema(mode="validation")
     schema = {"$schema": "https://json-schema.org/draft/2020-12/schema", **schema}
     path = SCHEMA_DIR / f"{name}.schema.json"
-    path.write_text(json.dumps(schema, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+    content = json.dumps(schema, sort_keys=True, separators=(",", ":")) + "\n"
+    path.write_text(content, encoding="utf-8")
 
 
 def main() -> None:
