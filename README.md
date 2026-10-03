@@ -2,37 +2,40 @@
 
 LowVRAM is an open local-AI model compatibility database for consumer hardware. The long-term product answers: **Can my computer run this model, how should I run it, and how fast will it be?**
 
-This repository is currently **P0 — Foundation only**. P0 defines machine-readable data contracts and validation. It intentionally does **not** run models.
+**P0 — Foundation is complete. P1 — Benchmark Runner is in progress.**
 
-## P0 scope
+## Current capability
 
-Implemented in P0:
-
-- Python 3.11+ package and Typer CLI
-- Strict Pydantic v2 models for hardware, model metadata, benchmark runs, and recipes
-- JSON Schema Draft 2020-12 files for all four contracts
-- `lowvram validate <file>`
-- Valid/invalid benchmark fixtures and automated tests
-- Ruff, mypy, pytest, and GitHub Actions CI
-- Data-format, architecture, and benchmark-methodology documentation
-
-Explicitly out of P0: benchmark execution, llama.cpp integration, GPU/RAM monitoring, recommendations, aggregation, Web UI, and model downloading.
-
-## Install for development
+P1-01 adds local hardware inventory:
 
 ```bash
 python -m pip install -e ".[dev]"
-lowvram --help
+lowvram system
 ```
 
-## Validate a document
+The command outputs structured JSON containing OS, CPU, RAM, NVIDIA GPU/VRAM, NVIDIA driver, CUDA compatibility version, and Python version. Machines without a usable NVIDIA installation remain valid and return `gpu: []`.
+
+P0 also provides strict data contracts and validation:
 
 ```bash
 lowvram validate tests/fixtures/valid/01_dense_single_gpu_success.json
 # VALID
 ```
 
-Invalid input exits non-zero and prints a field path, for example `hardware.gpu.0.vram_total_mb`.
+## Implemented
+
+- Python 3.11+ package and Typer CLI
+- Strict Pydantic v2 models for hardware, model metadata, benchmark runs, and recipes
+- JSON Schema Draft 2020-12 files for all four contracts
+- `lowvram validate <file>`
+- `lowvram system`
+- Valid/invalid benchmark fixtures and automated tests
+- Ruff, mypy, pytest, and GitHub Actions CI
+- P0 documentation plus P1-01 system-collector documentation
+
+## Not implemented yet
+
+Benchmark execution, llama.cpp runtime integration, process RAM/VRAM monitoring, performance parsing, recommendation logic, aggregation, Web UI, and model downloading remain later work.
 
 ## Fixed units
 
@@ -40,4 +43,4 @@ Invalid input exits non-zero and prints a field path, for example `hardware.gpu.
 - duration: seconds
 - throughput: tokens/sec
 
-See `docs/data-format.md` for the full contract.
+See `docs/data-format.md` and `docs/system-collector.md`.
