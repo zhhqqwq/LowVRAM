@@ -127,6 +127,12 @@ class BenchmarkOrchestrator:
             return fail(
                 FailureClassificationRequest(
                     stage=preparation.failure_stage or FailureStage.INTERNAL,
+                    model_path_exists=(
+                        False
+                        if preparation.failure_stage == FailureStage.PREFLIGHT
+                        and preparation.error_type == ErrorType.MODEL_NOT_FOUND
+                        else None
+                    ),
                     upstream_error_type=preparation.error_type or ErrorType.UNKNOWN,
                     message=preparation.error_message or "benchmark preparation failed",
                 )
