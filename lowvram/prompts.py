@@ -3,6 +3,7 @@
 import hashlib
 import sys
 from pathlib import Path
+from typing import Literal, cast
 
 from lowvram.models.prompt import BenchmarkPrompt
 
@@ -62,6 +63,7 @@ def load_benchmark_prompt(
     if expected_digest is None:
         raise UnsupportedPromptVersionError(f"unsupported benchmark prompt version: {version}")
 
+    prompt_version = cast(Literal["v1"], version)
     path = _resolve_prompt_path(version, prompt_dir)
     content = path.read_text(encoding="utf-8")
     actual_digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
@@ -71,7 +73,7 @@ def load_benchmark_prompt(
         )
 
     return BenchmarkPrompt(
-        prompt_version=version,
+        prompt_version=prompt_version,
         content=content,
         sha256=actual_digest,
     )
