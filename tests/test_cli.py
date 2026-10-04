@@ -94,7 +94,7 @@ def test_validate_invalid_file_has_field_path() -> None:
     assert "hardware.gpu.0.vram_total_mb" in result.stdout
 
 
-def _doctor_result(*, ready: bool) -> "DoctorResult":
+def _doctor_result(*, ready: bool):
     from lowvram.models.doctor import (
         DoctorCheck,
         DoctorCheckName,
