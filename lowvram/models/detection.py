@@ -46,12 +46,19 @@ class LlamaCppDetectionResult(StrictModel):
         if self.executable is None or self.source is None or self.candidate_name is None:
             raise ValueError("found results require executable, source, and candidate_name")
 
-        if self.version is not None and self.version_command is None:
-            raise ValueError("recognized versions require version_command")
+        if self.version is None and self.version_command is not None:
+            raise ValueError("version_command requires a recognized version")
+        if self.version is not None:
+            if self.version_command is None:
+                raise ValueError("recognized versions require version_command")
+            if not self.runnable:
+                raise ValueError("recognized versions require a runnable executable")
 
         expected_verified = self.runnable and self.version is not None
         if self.verified_eligible != expected_verified:
             raise ValueError(
                 "verified_eligible must equal runnable and recognized version state"
             )
+        if self.verified_eligible and self.probe_error_type is not None:
+            raise ValueError("verified detection cannot include probe_error_type")
         return self
