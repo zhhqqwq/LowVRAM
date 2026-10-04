@@ -567,3 +567,31 @@ def test_orchestrator_persists_crash_and_timeout_logs(
     assert record.result.success is False
     assert (run_dir / "stdout.log").read_text(encoding="utf-8") == execution.stdout
     assert (run_dir / "stderr.log").read_text(encoding="utf-8") == execution.stderr
+
+
+def test_orchestrator_propagates_run_logging_failure(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    from lowvram.runtime.logging import RunLoggingError
+
+    model_path = tmp_path / "model.gguf"
+    model_path.write_bytes(b"gguf")
+    runs_dir = tmp_path / "runs"
+    events: list[str] = []
+    adapter = FakeAdapter(events, _execution_success())
+    _patch_success_dependencies(monkeypatch, events)
+
+    def fail_logging(record, runs_root):
+        raise RunLoggingError(
+            run_id=record.run_id,
+            runs_root=runs_root,
+            message="simulated logging failure",
+        )
+
+    monkeypatch.setattr(orchestrator_module, "persist_run_artifacts", fail_logging)
+
+    with pytest.raises(RunLoggingError, match="simulated logging failure"):
+        BenchmarkOrchestrator(adapter=adapter, runs_dir=runs_dir).run(
+            _request(model_path)
+        )
