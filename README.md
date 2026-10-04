@@ -6,33 +6,26 @@ LowVRAM is an open local-AI model compatibility database for consumer hardware. 
 
 ## Current capability
 
-P1-01 provides local hardware inventory:
-
-```bash
-python -m pip install -e ".[dev]"
-lowvram system
-```
-
-P1-02 provides one-shot NVIDIA state snapshots. P1-03 adds target-process RAM monitoring.
-P1-04 adds baseline-adjusted multi-GPU VRAM monitoring:
+P1-01 through P1-04 provide hardware inventory plus RAM/VRAM measurement. P1-05 adds the
+external runtime execution boundary:
 
 ```python
-from lowvram.collectors import RamMonitor, VramMonitor
+from lowvram.models import RuntimeExecutionRequest
+from lowvram.runtime import LlamaCppRuntimeAdapter
 
-ram_monitor = RamMonitor(pid)
-vram_monitor = VramMonitor(pid)
-
-ram_monitor.start()
-vram_monitor.start()
-
-# benchmark process runs here
-
-ram_result = ram_monitor.stop()
-vram_result = vram_monitor.stop()
+adapter = LlamaCppRuntimeAdapter()
+result = adapter.execute(
+    RuntimeExecutionRequest(
+        executable="/path/to/llama-cli",
+        arguments=["--version"],
+        timeout_seconds=10,
+    )
+)
 ```
 
-Both monitors use a 100 ms default cadence. VRAM results retain total and per-GPU
-baseline/current/peak/delta values so pre-existing desktop VRAM is not counted as new load.
+The adapter builds shell-free argv, captures stdout/stderr and exit code, enforces timeout,
+terminates timed-out process trees, and normalizes missing runtime / timeout / process crash
+outcomes.
 
 P0 also provides strict data contracts and validation:
 
@@ -50,14 +43,15 @@ lowvram validate tests/fixtures/valid/01_dense_single_gpu_success.json
 - one-shot NVIDIA status snapshots
 - target-process RAM monitoring with child-process tracking
 - baseline-adjusted multi-GPU VRAM monitoring
+- runtime adapter abstraction and shell-free subprocess execution
 - valid/invalid benchmark fixtures and automated tests
 - Ruff, mypy, pytest, and GitHub Actions CI
-- P0 plus P1 collector/monitor documentation
+- P0 plus P1 collector/monitor/runtime documentation
 
 ## Not implemented yet
 
-Benchmark execution, llama.cpp runtime integration, performance parsing, recommendation
-logic, aggregation, Web UI, and model downloading remain later work.
+Automatic llama.cpp discovery, recipe-to-runtime command translation, benchmark performance
+parsing, recommendation logic, aggregation, Web UI, and model downloading remain later work.
 
 ## Fixed units
 
@@ -65,5 +59,4 @@ logic, aggregation, Web UI, and model downloading remain later work.
 - duration: seconds
 - throughput: tokens/sec
 
-See `docs/data-format.md`, `docs/system-collector.md`, `docs/nvidia-collector.md`,
-`docs/ram-monitor.md`, and `docs/vram-monitor.md`.
+See `docs/runtime-adapter.md` for P1-05.
