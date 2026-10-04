@@ -344,3 +344,47 @@ def test_runtime_execution_result_rejects_exit_code_for_timeout() -> None:
             error_type=ErrorType.TIMEOUT,
             error_message="timed out",
         )
+
+def test_spawn_exposes_pid_before_wait_and_preserves_result() -> None:
+    adapter = LlamaCppRuntimeAdapter()
+    session = adapter.spawn(
+        _python_request(
+            "import os, time; print(os.getpid(), flush=True); time.sleep(0.05)"
+        )
+    )
+
+    assert session.pid > 0
+    result = session.wait()
+
+    assert result.success is True
+    assert result.exit_code == 0
+    assert result.stdout.strip() == str(session.pid)
+
+
+def test_runtime_process_session_rejects_second_wait() -> None:
+    adapter = LlamaCppRuntimeAdapter()
+    session = adapter.spawn(_python_request("print('done')"))
+
+    result = session.wait()
+    assert result.success is True
+
+    with pytest.raises(runtime_adapter.RuntimeSessionStateError, match="already closed"):
+        session.wait()
+
+
+def test_spawn_error_is_structured_before_session_exists(monkeypatch) -> None:
+    monkeypatch.setattr(
+        runtime_adapter.subprocess,
+        "Popen",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            FileNotFoundError(errno.ENOENT, "missing")
+        ),
+    )
+
+    with pytest.raises(runtime_adapter.RuntimeSpawnError) as raised:
+        LlamaCppRuntimeAdapter().spawn(
+            RuntimeExecutionRequest(executable="missing-llama-cli")
+        )
+
+    assert raised.value.error_type == ErrorType.RUNTIME_NOT_FOUND
+    assert "missing-llama-cli" in raised.value.message

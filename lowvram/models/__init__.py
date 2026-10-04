@@ -7,6 +7,10 @@ from lowvram.models.hardware import HardwareInfo
 from lowvram.models.memory import RamMonitorResult, RamSample
 from lowvram.models.model import ModelInfo
 from lowvram.models.nvidia import NvidiaGPUStatus, NvidiaSnapshot
+from lowvram.models.orchestrator import (
+    BenchmarkOrchestrationRecord,
+    BenchmarkOrchestratorRequest,
+)
 from lowvram.models.output_parser import (
     LlamaCppOutputParseResult,
     LlamaCppTimingMetrics,
@@ -17,6 +21,8 @@ from lowvram.models.runtime import RuntimeExecutionRequest, RuntimeExecutionResu
 from lowvram.models.vram import VramGPUResult, VramGPUUsage, VramMonitorResult, VramSample
 
 __all__ = [
+    "BenchmarkOrchestrationRecord",
+    "BenchmarkOrchestratorRequest",
     "BenchmarkPrompt",
     "BenchmarkRun",
     "HardwareInfo",
