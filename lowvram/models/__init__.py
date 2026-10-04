@@ -3,12 +3,17 @@
 from lowvram.models.benchmark import BenchmarkRun
 from lowvram.models.command import LlamaCppCommand, LlamaCppCommandRequest
 from lowvram.models.detection import LlamaCppDetectionResult
+from lowvram.models.doctor import (
+    DoctorCheck,
+    DoctorCheckName,
+    DoctorCheckStatus,
+    DoctorResult,
+)
 from lowvram.models.dry_run import (
     BenchmarkDryRunConfiguration,
     BenchmarkDryRunResult,
 )
-from lowvram.models.doctor import (
-    DoctorCheck,
+from lowvram.models.failure import (    DoctorCheck,
     DoctorCheckName,
     DoctorCheckStatus,
     DoctorResult,
@@ -41,10 +46,10 @@ from lowvram.models.runtime import RuntimeExecutionRequest, RuntimeExecutionResu
 from lowvram.models.vram import VramGPUResult, VramGPUUsage, VramMonitorResult, VramSample
 
 __all__ = [
-    "BenchmarkOrchestrationRecord",
-    "BenchmarkOrchestratorRequest",
     "BenchmarkDryRunConfiguration",
     "BenchmarkDryRunResult",
+    "BenchmarkOrchestrationRecord",
+    "BenchmarkOrchestratorRequest",
     "BenchmarkPreparationRequest",
     "BenchmarkPreparationResult",
     "BenchmarkPrompt",
