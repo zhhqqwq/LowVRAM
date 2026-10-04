@@ -8,29 +8,17 @@ LowVRAM is an open local-AI model compatibility database for consumer hardware. 
 
 P1-01 through P1-04 provide hardware inventory plus RAM/VRAM measurement. P1-05 provides the
 external process execution boundary. P1-06 discovers and version-probes llama.cpp. P1-07
-builds deterministic llama.cpp argv:
+builds deterministic llama.cpp argv. P1-08 provides the fixed Standard Prompt:
 
 ```python
-from lowvram.models import LlamaCppCommandRequest
-from lowvram.runtime import build_llama_cpp_command
+from lowvram.prompts import load_benchmark_prompt
 
-command = build_llama_cpp_command(
-    LlamaCppCommandRequest(
-        executable="/path/to/llama-cli",
-        model_path="/path/to/model.gguf",
-        context_length=4096,
-        threads=8,
-        gpu_layers=32,
-        batch_size=512,
-        temperature=0.8,
-        seed=42,
-    )
-)
+prompt = load_benchmark_prompt()
 ```
 
-The builder records the complete actual argv, preserves paths as single arguments, supports
-CPU-only `gpu_layers=0`, and rejects `extra_args` that would silently override managed
-benchmark parameters.
+The canonical `benchmark_prompts/v1.txt` asset is versioned as `v1` and pinned by SHA-256.
+The loader refuses missing, unknown, or modified prompt content so benchmark inputs cannot
+silently drift between runs.
 
 P0 also provides strict data contracts and validation:
 
@@ -49,13 +37,14 @@ lowvram validate tests/fixtures/valid/01_dense_single_gpu_success.json
 - shell-free runtime adapter abstraction
 - llama.cpp explicit-path/PATH discovery and version detection
 - deterministic llama.cpp command building
+- versioned, integrity-pinned Standard Prompt
 - valid/invalid benchmark fixtures and automated tests
 - Ruff, mypy, pytest, and GitHub Actions CI
 
 ## Not implemented yet
 
-Standard benchmark prompt, performance parsing, benchmark orchestration, recommendation
-logic, aggregation, Web UI, and model downloading remain later work.
+Performance parsing, benchmark orchestration, recommendation logic, aggregation, Web UI, and
+model downloading remain later work.
 
 ## Fixed units
 
@@ -63,4 +52,4 @@ logic, aggregation, Web UI, and model downloading remain later work.
 - duration: seconds
 - throughput: tokens/sec
 
-See `docs/llama-cpp-command-builder.md` for P1-07.
+See `docs/standard-prompt.md` for P1-08.
