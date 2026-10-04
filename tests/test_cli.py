@@ -20,7 +20,7 @@ def test_help_starts() -> None:
     assert "validate" in result.stdout
 
 
-def test_system_outputs_structured_json(monkeypatch) -> None:
+def test_system_outputs_all_p1_01_fields_as_structured_json(monkeypatch) -> None:
     hardware = HardwareInfo.model_validate(
         {
             "cpu": {
@@ -53,9 +53,30 @@ def test_system_outputs_structured_json(monkeypatch) -> None:
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload["cpu"]["name"] == "Example CPU"
+
+    assert payload["os"] == {
+        "name": "Linux",
+        "version": "6.8",
+        "architecture": "x86_64",
+    }
+    assert payload["cpu"] == {
+        "name": "Example CPU",
+        "architecture": "x86_64",
+        "physical_cores": 8,
+        "logical_cores": 16,
+    }
+    assert payload["ram_total_mb"] == 32768
+
+    assert len(payload["gpu"]) == 1
+    assert payload["gpu"][0]["vendor"] == "nvidia"
+    assert payload["gpu"][0]["name"] == "NVIDIA GeForce RTX 4060"
     assert payload["gpu"][0]["vram_total_mb"] == 8192
+    assert payload["gpu"][0]["driver_version"] == "555.42"
+    assert payload["gpu"][0]["cuda_version"] == "12.5"
+
+    assert payload["driver"]["nvidia_driver_version"] == "555.42"
     assert payload["driver"]["cuda_version"] == "12.5"
+    assert payload["python_version"] == "3.11.9"
 
 
 def test_validate_valid_file() -> None:
