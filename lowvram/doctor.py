@@ -1,7 +1,7 @@
 """P1-12 environment readiness diagnostics."""
 
-import os
 from contextlib import suppress
+import os
 import platform
 import shutil
 import sys
