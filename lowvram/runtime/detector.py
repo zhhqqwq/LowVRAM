@@ -10,6 +10,7 @@ from typing import Literal
 from lowvram.models.benchmark import ErrorType
 from lowvram.models.detection import LlamaCppDetectionResult
 from lowvram.models.runtime import RuntimeExecutionRequest, RuntimeExecutionResult
+from lowvram.runtime.adapter import RuntimeAdapter
 from lowvram.runtime.llama_cpp import LlamaCppRuntimeAdapter
 
 _VERSION_PATTERNS = (
@@ -21,6 +22,7 @@ _VERSION_PATTERNS = (
     re.compile(r"(?i)\bb([0-9]{3,})\b"),
 )
 _VERSION_PROBES = (["--version"], ["version"])
+_STARTED_PROCESS_ERRORS = {ErrorType.PROCESS_CRASH, ErrorType.TIMEOUT}
 
 
 def llama_cpp_candidate_names(system_name: str | None = None) -> tuple[str, ...]:
@@ -40,6 +42,8 @@ def parse_llama_cpp_version(output: str) -> str | None:
         value = match.group(1)
         if index in {1, 2}:
             return f"b{value}"
+        if not any(character.isdigit() for character in value):
+            continue
         return value
     return None
 
@@ -59,11 +63,16 @@ def _probe_output(result: RuntimeExecutionResult) -> str:
     return "\n".join(part for part in (result.stdout, result.stderr) if part)
 
 
+def _execution_started(result: RuntimeExecutionResult) -> bool:
+    """Return whether the adapter result proves a child process actually started."""
+    return result.success or result.error_type in _STARTED_PROCESS_ERRORS
+
+
 def _probe_candidate(
     executable: str,
     source: Literal["explicit_path", "path"],
     candidate_name: str,
-    adapter: LlamaCppRuntimeAdapter,
+    adapter: RuntimeAdapter,
 ) -> LlamaCppDetectionResult:
     """Probe one discovered executable with --version then legacy version."""
     saw_started_process = False
@@ -79,7 +88,7 @@ def _probe_candidate(
             )
         )
 
-        if result.error_type != ErrorType.RUNTIME_NOT_FOUND:
+        if _execution_started(result):
             saw_started_process = True
 
         if result.success:
@@ -117,10 +126,22 @@ def _probe_candidate(
     )
 
 
+def _prefer_fallback(
+    current: LlamaCppDetectionResult | None,
+    candidate: LlamaCppDetectionResult,
+) -> LlamaCppDetectionResult:
+    """Prefer runnable diagnostics while retaining candidate-order stability."""
+    if current is None:
+        return candidate
+    if candidate.runnable and not current.runnable:
+        return candidate
+    return current
+
+
 def detect_llama_cpp(
     explicit_path: str | None = None,
     *,
-    adapter: LlamaCppRuntimeAdapter | None = None,
+    adapter: RuntimeAdapter | None = None,
     system_name: str | None = None,
 ) -> LlamaCppDetectionResult:
     """Detect llama.cpp from an explicit path or the current PATH."""
@@ -141,10 +162,18 @@ def detect_llama_cpp(
             adapter=runtime_adapter,
         )
 
+    fallback: LlamaCppDetectionResult | None = None
+    seen_executables: set[str] = set()
+
     for candidate_name in llama_cpp_candidate_names(system_name):
         executable = shutil.which(candidate_name)
         if executable is None:
             continue
+
+        executable_key = os.path.normcase(os.path.abspath(executable))
+        if executable_key in seen_executables:
+            continue
+        seen_executables.add(executable_key)
 
         result = _probe_candidate(
             executable=executable,
@@ -152,9 +181,12 @@ def detect_llama_cpp(
             candidate_name=candidate_name,
             adapter=runtime_adapter,
         )
-
-        if result.runnable or result.version is not None:
+        if result.verified_eligible:
             return result
+        fallback = _prefer_fallback(fallback, result)
+
+    if fallback is not None:
+        return fallback
 
     return LlamaCppDetectionResult(
         found=False,
