@@ -13,11 +13,6 @@ from lowvram.models.dry_run import (
     BenchmarkDryRunConfiguration,
     BenchmarkDryRunResult,
 )
-from lowvram.models.failure import (    DoctorCheck,
-    DoctorCheckName,
-    DoctorCheckStatus,
-    DoctorResult,
-)
 from lowvram.models.failure import (
     FailureClassificationRequest,
     FailureClassificationResult,
