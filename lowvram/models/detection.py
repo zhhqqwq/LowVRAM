@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import model_validator
 
 from lowvram.models.base import StrictModel
 from lowvram.models.benchmark import ErrorType
