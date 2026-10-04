@@ -71,3 +71,21 @@ def test_unknown_critical_field_is_not_ignored() -> None:
     data["mystery_critical_field"] = "must fail"
     with pytest.raises(ValidationError):
         BenchmarkRun.model_validate(data)
+
+
+def test_success_benchmark_allows_unreported_load_time() -> None:
+    data = load_fixture("valid", "01_dense_single_gpu_success.json")
+    data["performance"]["load_time_seconds"] = None
+
+    benchmark = BenchmarkRun.model_validate(data)
+
+    assert benchmark.result.success is True
+    assert benchmark.performance.load_time_seconds is None
+
+
+def test_success_benchmark_still_requires_throughput_metrics() -> None:
+    data = load_fixture("valid", "01_dense_single_gpu_success.json")
+    data["performance"]["prompt_tokens_per_second"] = None
+
+    with pytest.raises(ValidationError, match="prompt_tokens_per_second"):
+        BenchmarkRun.model_validate(data)

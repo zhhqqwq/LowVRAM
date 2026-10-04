@@ -92,7 +92,7 @@ class BenchmarkRun(StrictModel):
 
     @model_validator(mode="after")
     def validate_cross_field_contract(self) -> "BenchmarkRun":
-        """Require complete metrics for success and consistent model/runtime references."""
+        """Require observable success metrics and consistent model/runtime references."""
         if self.configuration.model_id != self.model.id:
             raise ValueError("configuration.model_id must match model.id")
         if self.configuration.runtime != self.runtime.name:
@@ -102,7 +102,6 @@ class BenchmarkRun(StrictModel):
             required_metrics = {
                 "memory.peak_vram_mb": self.memory.peak_vram_mb,
                 "memory.peak_ram_mb": self.memory.peak_ram_mb,
-                "performance.load_time_seconds": self.performance.load_time_seconds,
                 "performance.prompt_tokens_per_second": self.performance.prompt_tokens_per_second,
                 "performance.generation_tokens_per_second": (
                     self.performance.generation_tokens_per_second
