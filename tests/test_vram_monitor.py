@@ -16,7 +16,6 @@ from lowvram.collectors.vram import (
 from lowvram.models.vram import (
     VramGPUResult,
     VramGPUUsage,
-    VramMonitorResult,
     VramSample,
 )
 
