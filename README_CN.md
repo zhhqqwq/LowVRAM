@@ -4,23 +4,34 @@ LowVRAM 是一个面向消费级硬件的开放本地 AI 模型兼容性数据�
 
 **P0 — Foundation 已完成，当前处于 P1 — Benchmark Runner。**
 
-当前 P1 已完成硬件采集、RAM/VRAM Monitor、Runtime Adapter，并在 P1-06 新增
-llama.cpp Detector：
+当前 P1 已完成硬件采集、RAM/VRAM Monitor、Runtime Adapter、llama.cpp Detector，并在
+P1-07 新增确定性的 llama.cpp Command Builder：
 
 ```python
-from lowvram.runtime import detect_llama_cpp
+from lowvram.models import LlamaCppCommandRequest
+from lowvram.runtime import build_llama_cpp_command
 
-result = detect_llama_cpp()
+command = build_llama_cpp_command(
+    LlamaCppCommandRequest(
+        executable="/path/to/llama-cli",
+        model_path="/path/to/model.gguf",
+        context_length=4096,
+        threads=8,
+        gpu_layers=32,
+        batch_size=512,
+        temperature=0.8,
+        seed=42,
+    )
+)
 ```
 
-P1-06 支持显式 executable 路径或 PATH 搜索，优先现代 `llama-cli`，同时兼容旧版
-`main`，并覆盖 Windows/Linux 候选名称。版本探测依次尝试 `--version` 和
-`version`。
+P1-07 固定映射 model/context/threads/gpu_layers/batch/temperature/seed，并保存完整实际
+argv。路径包含空格时仍作为单个参数，不经过 shell。
 
-结构化结果记录 executable、发现来源、候选名称、是否可运行、版本、实际成功的版本
-探测命令，以及 `verified_eligible`。
+`extra_args` 会保持原顺序追加，但不能重复 `--model`、`--ctx-size`、
+`--threads`、`--gpu-layers`、`--batch-size`、`--temp`、`--seed`
+及其短别名，避免实际命令与结构化配置不一致。
 
-如果 executable 可以运行但版本无法识别，仍报告为 found，但
-`verified_eligible = false`，因此不能生成 Verified Benchmark。
+CPU-only 使用 `gpu_layers=0`。P0 `Recipe` 在 P1-07 保持不变。
 
-P1-06 不负责 Recipe 到 llama.cpp 参数转换；该职责留给 P1-07。
+P1-08 将负责固定 Standard Prompt。
