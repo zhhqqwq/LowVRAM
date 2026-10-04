@@ -115,6 +115,14 @@ class BenchmarkOrchestrator:
                     detection.message or "llama.cpp runtime is not runnable",
                 )
             )
+        executable = detection.executable
+        if executable is None:
+            return finish(
+                _failure(
+                    ErrorType.UNKNOWN,
+                    "llama.cpp detection returned no executable path",
+                )
+            )
 
         try:
             prompt = load_benchmark_prompt(request.prompt_version)
@@ -134,7 +142,7 @@ class BenchmarkOrchestrator:
 
         try:
             command_request = LlamaCppCommandRequest(
-                executable=detection.executable,
+                executable=executable,
                 model_path=request.model_path,
                 context_length=request.configuration.context_length,
                 threads=request.configuration.threads,
