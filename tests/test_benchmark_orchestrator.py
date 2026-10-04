@@ -64,7 +64,11 @@ def _recipe(*, extra_args: list[str] | None = None) -> Recipe:
     )
 
 
-def _request(model_path: Path, *, extra_args: list[str] | None = None) -> BenchmarkOrchestratorRequest:
+def _request(
+    model_path: Path,
+    *,
+    extra_args: list[str] | None = None,
+) -> BenchmarkOrchestratorRequest:
     return BenchmarkOrchestratorRequest(
         model_path=str(model_path),
         model=_model(),
