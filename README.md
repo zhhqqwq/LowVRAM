@@ -57,4 +57,4 @@ remain later work.
 - duration: seconds
 - throughput: tokens/sec
 
-See `docs/llama-cpp-output-parser.md` for P1-09.
+See `docs/benchmark-orchestrator.md` for P1-10.
