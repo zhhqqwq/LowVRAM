@@ -167,9 +167,12 @@ def test_export_omits_private_runtime_and_model_paths() -> None:
     assert "/private/model.gguf" not in payload
 
 
-def test_success_export_rejects_missing_direct_load_time() -> None:
-    with pytest.raises(BenchmarkExportError, match="load time"):
-        build_benchmark_run(_success_record(load_time_seconds=None))
+def test_success_export_preserves_missing_direct_load_time_as_null() -> None:
+    benchmark = build_benchmark_run(_success_record(load_time_seconds=None))
+
+    assert benchmark.performance.load_time_seconds is None
+    assert benchmark.verification.notes is not None
+    assert "did not directly expose model load time" in benchmark.verification.notes
 
 
 def test_execution_failure_can_export_null_performance() -> None:

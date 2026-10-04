@@ -37,10 +37,6 @@ def build_benchmark_run(record: BenchmarkOrchestrationRecord) -> BenchmarkRun:
     )
 
     if record.result.success:
-        if load_time_seconds is None:
-            raise BenchmarkExportError(
-                "successful benchmark export requires directly parsed llama.cpp load time"
-            )
         if peak_ram_mb is None:
             raise BenchmarkExportError(
                 "successful benchmark export requires process-tree peak RAM"
@@ -98,14 +94,23 @@ def _verification_info(record: BenchmarkOrchestrationRecord) -> VerificationInfo
         evidence.append(f"prompt:{record.prompt_version}:{record.prompt_sha256}")
     if detection is not None and detection.version is not None:
         evidence.append(f"runtime:llama.cpp:{detection.version}")
+    if record.performance is not None:
+        evidence.append(f"timing_format:{record.performance.timing_format}")
     if record.failure_classification is not None:
         evidence.append(f"failure_rule:{record.failure_classification.rule}")
+
+    notes = (
+        "Local runtime paths and raw logs remain in private run artifacts; "
+        "this BenchmarkRun intentionally omits them."
+    )
+    if record.performance is not None and record.performance.load_time_seconds is None:
+        notes += (
+            " load_time_seconds is null because this llama.cpp timing format did not "
+            "directly expose model load time; total process duration was not substituted."
+        )
 
     return VerificationInfo(
         status="verified" if verified else "unverified",
         evidence=evidence,
-        notes=(
-            "Local runtime paths and raw logs remain in private run artifacts; "
-            "this BenchmarkRun intentionally omits them."
-        ),
+        notes=notes,
     )

@@ -124,6 +124,19 @@ def _matrix() -> list[SeedCase]:
     ]
 
 
+def _llama_cli_extra_args(case: SeedCase) -> tuple[str, ...]:
+    return (
+        "--no-conversation",
+        "--single-turn",
+        "--simple-io",
+        "--no-display-prompt",
+        "--color",
+        "off",
+        "--n-predict",
+        str(case.n_predict),
+    )
+
+
 def _recipe(case: SeedCase, model: SeedModel, threads: int) -> Recipe:
     return Recipe(
         model_id=model.model.id,
@@ -132,7 +145,7 @@ def _recipe(case: SeedCase, model: SeedModel, threads: int) -> Recipe:
         gpu_layers=0,
         threads=threads,
         batch_size=case.batch_size,
-        extra_args=["--no-conversation", "--n-predict", str(case.n_predict)],
+        extra_args=list(_llama_cli_extra_args(case)),
     )
 
 
@@ -152,7 +165,7 @@ def _dry_run_request(
         temperature=0.0,
         seed=42,
         prompt_version="v1",
-        extra_args=("--no-conversation", "--n-predict", str(case.n_predict)),
+        extra_args=_llama_cli_extra_args(case),
     )
 
 
@@ -227,6 +240,20 @@ def main() -> int:
                 f"dry-run blocked for {case.name}: {dry_run.error_message}"
             )
 
+        required_flags = {
+            "--no-conversation",
+            "--single-turn",
+            "--simple-io",
+            "--no-display-prompt",
+        }
+        if not required_flags.issubset(set(dry_run.command.argv)):
+            raise SystemExit(f"one-shot argv contract missing for {case.name}")
+
+        print(
+            f"[seed {index}/10] start {case.name} "
+            f"model={seed_model.model.id} ctx={case.context_length}",
+            flush=True,
+        )
         record = orchestrator.run(
             _run_request(case, seed_model, args.llama_cli, args.threads)
         )
@@ -236,6 +263,10 @@ def main() -> int:
         )
         run_dir = args.output_dir / record.run_id
         artifact_set_valid = _validate_artifact_set(run_dir)
+        stdout_path = run_dir / "stdout.log"
+        stderr_path = run_dir / "stderr.log"
+        stdout_bytes = stdout_path.stat().st_size if stdout_path.exists() else None
+        stderr_bytes = stderr_path.stat().st_size if stderr_path.exists() else None
 
         try:
             benchmark = build_benchmark_run(record)
@@ -280,6 +311,9 @@ def main() -> int:
                 "prompt_sha256": record.prompt_sha256,
                 "argv_consistent": argv_consistent,
                 "artifact_set_valid": artifact_set_valid,
+                "timing_format": (
+                    performance.timing_format if performance is not None else None
+                ),
                 "load_time_seconds": (
                     performance.load_time_seconds
                     if performance is not None
@@ -302,14 +336,23 @@ def main() -> int:
                 ),
                 "peak_vram_mb": benchmark.memory.peak_vram_mb,
                 "verification_status": benchmark.verification.status,
+                "stdout_bytes": stdout_bytes,
+                "stderr_bytes": stderr_bytes,
             }
+        )
+        print(
+            f"[seed {index}/10] done {case.name} "
+            f"success={record.result.success} "
+            f"error={record.result.error_type} "
+            f"duration={record.execution.duration_seconds if record.execution else None} "
+            f"stdout_bytes={stdout_bytes}",
+            flush=True,
         )
 
     success_runs = [run for run in runs if run["success"]]
     failed_runs = [run for run in runs if not run["success"]]
     success_timings_valid = all(
-        _positive_finite(run["load_time_seconds"])
-        and _positive_finite(run["prompt_tokens_per_second"])
+        _positive_finite(run["prompt_tokens_per_second"])
         and _positive_finite(run["generation_tokens_per_second"])
         for run in success_runs
     )
@@ -340,6 +383,21 @@ def main() -> int:
     privacy_clean = all(
         not _contains_private_path(benchmark, private_paths)
         for benchmark in exported
+    )
+    bounded_log_sizes = all(
+        isinstance(run["stdout_bytes"], int)
+        and isinstance(run["stderr_bytes"], int)
+        and run["stdout_bytes"] <= 5_000_000
+        and run["stderr_bytes"] <= 5_000_000
+        for run in runs
+    )
+    load_time_contract_resolved = all(
+        (
+            _positive_finite(run["load_time_seconds"])
+            if run["load_time_seconds"] is not None
+            else run["timing_format"] == "compact"
+        )
+        for run in success_runs
     )
 
     acceptance = {
@@ -386,20 +444,23 @@ def main() -> int:
         "repeatability_no_order_of_magnitude_outlier": (
             repeatability_ratio < 10.0
         ),
-        "load_time_contract_resolved": all(
-            run["load_time_seconds"] is not None for run in success_runs
-        ),
+        "load_time_contract_resolved": load_time_contract_resolved,
+        "bounded_log_sizes": bounded_log_sizes,
         "privacy_clean_benchmark_exports": privacy_clean,
     }
     technical_pass = all(acceptance.values())
 
     report = {
-        "schema_version": "p1.15.0",
+        "schema_version": "p1.15.1",
         "environment_source": args.environment_source,
         "github_actions": os.getenv("GITHUB_ACTIONS") == "true",
         "runner_os": os.getenv("RUNNER_OS"),
         "runner_arch": os.getenv("RUNNER_ARCH"),
         "threads": args.threads,
+        "load_time_policy": (
+            "record only directly exposed model load time; otherwise null; "
+            "never substitute total process duration"
+        ),
         "runtime_binary_sha256": _sha256(args.llama_cli),
         "models": {
             key: {

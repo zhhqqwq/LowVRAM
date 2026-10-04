@@ -223,3 +223,52 @@ def test_malformed_load_time_does_not_fabricate_value() -> None:
     assert result.success is True
     assert result.metrics is not None
     assert result.metrics.load_time_seconds is None
+
+
+def test_parse_b10336_compact_cli_timing_without_fabricating_durations() -> None:
+    result = parse_llama_cpp_output(
+        stdout="[ Prompt: 547.0 t/s | Generation: 136.7 t/s ]\nExiting...\n",
+        stderr="",
+    )
+
+    assert result.success is True
+    assert result.metrics == LlamaCppTimingMetrics(
+        timing_format="compact",
+        load_time_seconds=None,
+        prompt_eval_time_seconds=None,
+        prompt_tokens_per_second=547.0,
+        eval_time_seconds=None,
+        generation_tokens_per_second=136.7,
+    )
+
+
+def test_malformed_trailing_compact_timing_returns_parse_failed() -> None:
+    result = parse_llama_cpp_output(
+        stdout=(
+            "[ Prompt: 100.0 t/s | Generation: 50.0 t/s ]\n"
+            "[ Prompt: nan t/s | Generation: 50.0 t/s ]\n"
+        ),
+        stderr="",
+    )
+
+    assert result.success is False
+    assert result.error_type == ErrorType.PARSE_FAILED
+
+
+def test_detailed_timing_model_requires_duration_fields() -> None:
+    with pytest.raises(ValidationError, match="detailed timing format"):
+        LlamaCppTimingMetrics(
+            timing_format="detailed",
+            prompt_tokens_per_second=100.0,
+            generation_tokens_per_second=50.0,
+        )
+
+
+def test_compact_timing_model_rejects_unreported_duration_fields() -> None:
+    with pytest.raises(ValidationError, match="compact timing format"):
+        LlamaCppTimingMetrics(
+            timing_format="compact",
+            prompt_eval_time_seconds=1.0,
+            prompt_tokens_per_second=100.0,
+            generation_tokens_per_second=50.0,
+        )

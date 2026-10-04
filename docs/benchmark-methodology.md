@@ -25,9 +25,14 @@ P0 fixtures are synthetic contract examples, not real performance claims. Runtim
 
 ## P1-15 metric provenance
 
-P1-15 resolves the successful-run `load_time_seconds` contract by parsing llama.cpp's
-directly printed `load time` value. Total process duration must not be substituted for model
-load time.
+P1-15 resolves the `load_time_seconds` contract by recording a directly exposed llama.cpp
+model-load value when the selected timing format provides one. llama-cli b10336 emits only a
+compact Prompt/Generation throughput summary, so its successful records keep
+`load_time_seconds=null`. Total process duration must not be substituted for model load time.
+
+The output parser supports both detailed `prompt eval time / eval time` blocks and the
+b10336-style compact `[ Prompt: X t/s | Generation: Y t/s ]` line. Compact output does not
+fabricate prompt/eval duration fields.
 
 Public Benchmark export uses process-tree peak RAM. CPU-only runs have an observed VRAM peak
 of zero. On NVIDIA systems, a successful public Benchmark requires process-attributed VRAM;

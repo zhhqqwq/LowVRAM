@@ -30,9 +30,19 @@ The CI validation workflow pins:
 
 Each attempt must publish the P1-14 three-file run directory. The seed runner also exports a
 path-free BenchmarkRun JSON and validates prompt/runtime identity, dry-run argv equality,
-positive finite timings, RAM/VRAM semantics, repeatability, and private-path exclusion.
+positive finite throughput, RAM/VRAM semantics, repeatability, bounded log sizes, explicit\nload-time availability semantics, and private-path exclusion.
 
 The GitHub-hosted workflow is real execution evidence, not a mocked benchmark. The original
 P1-15 plan explicitly asks for runs on the developer's own computer, so CI evidence can pass
 the technical real-seed checks while the overall P1 Final Gate remains blocked until the same
 acceptance runs on a developer-controlled consumer machine.
+
+
+## Current llama-cli timing compatibility
+
+Pinned llama.cpp b10336 prints a compact timing summary instead of the older detailed
+`prompt eval time / eval time` block. LowVRAM parses both formats. For compact timing,
+prompt/generation throughput is recorded directly while prompt/eval durations and
+`load_time_seconds` remain null because the CLI did not expose those values separately.
+
+Do not derive model load time from total subprocess duration.
