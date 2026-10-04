@@ -38,6 +38,21 @@ class FakeProcess:
         return SimpleNamespace(rss=self._rss_bytes)
 
 
+def test_bytes_to_mb_uses_lowvram_integer_mb_unit() -> None:
+    assert memory._bytes_to_mb(3 * 1024 * 1024 + 1024) == 3
+    assert memory._bytes_to_mb(-1) == 0
+
+
+def test_system_used_ram_uses_psutil_used_value(monkeypatch) -> None:
+    monkeypatch.setattr(
+        memory.psutil,
+        "virtual_memory",
+        lambda: SimpleNamespace(used=1536 * 1024 * 1024),
+    )
+
+    assert memory._collect_system_used_ram_mb() == 1536
+
+
 def test_process_tree_ram_includes_recursive_children(monkeypatch) -> None:
     grandchild = FakeProcess(102, 25)
     child = FakeProcess(101, 50, [grandchild])
@@ -77,6 +92,42 @@ def test_known_child_remains_tracked_after_root_exits(monkeypatch) -> None:
 
     assert memory._collect_process_tree_ram_mb(100, tracked) == 50
     assert tracked == {101}
+
+
+def test_access_denied_root_does_not_hide_tracked_child(monkeypatch) -> None:
+    child = FakeProcess(101, 50)
+
+    def fake_process(pid: int) -> FakeProcess:
+        if pid == 100:
+            raise memory.psutil.AccessDenied(pid)
+        if pid == 101:
+            return child
+        raise memory.psutil.NoSuchProcess(pid)
+
+    monkeypatch.setattr(memory.psutil, "Process", fake_process)
+
+    tracked = {100, 101}
+
+    assert memory._collect_process_tree_ram_mb(100, tracked) == 50
+    assert tracked == {101}
+
+
+def test_zombie_tracked_process_is_skipped(monkeypatch) -> None:
+    root = FakeProcess(100, 100)
+
+    def fake_process(pid: int) -> FakeProcess:
+        if pid == 100:
+            return root
+        if pid == 101:
+            raise memory.psutil.ZombieProcess(pid)
+        raise memory.psutil.NoSuchProcess(pid)
+
+    monkeypatch.setattr(memory.psutil, "Process", fake_process)
+
+    tracked = {100, 101}
+
+    assert memory._collect_process_tree_ram_mb(100, tracked) == 100
+    assert tracked == {100}
 
 
 def test_ram_monitor_tracks_baseline_current_peak_and_delta(monkeypatch) -> None:
@@ -149,6 +200,12 @@ def test_ram_monitor_uses_100ms_default_interval() -> None:
     assert memory.DEFAULT_SAMPLE_INTERVAL_SECONDS == 0.1
 
 
+@pytest.mark.parametrize("pid", [0, -1])
+def test_ram_monitor_rejects_nonpositive_pid(pid: int) -> None:
+    with pytest.raises(ValueError, match="positive integer"):
+        RamMonitor(pid)
+
+
 def test_ram_monitor_requires_existing_target(monkeypatch) -> None:
     monkeypatch.setattr(memory.psutil, "pid_exists", lambda pid: False)
 
@@ -193,6 +250,22 @@ def test_ram_monitor_result_rejects_inconsistent_delta() -> None:
             current_process_ram_mb=110,
             peak_process_ram_mb=120,
             delta_process_ram_mb=19,
+            baseline_system_ram_mb=1000,
+            current_system_ram_mb=1010,
+            peak_system_ram_mb=1020,
+            delta_system_ram_mb=20,
+            sample_count=3,
+            sample_interval_seconds=0.1,
+        )
+
+
+def test_ram_monitor_result_rejects_peak_below_current() -> None:
+    with pytest.raises(ValidationError):
+        RamMonitorResult(
+            baseline_process_ram_mb=100,
+            current_process_ram_mb=130,
+            peak_process_ram_mb=120,
+            delta_process_ram_mb=20,
             baseline_system_ram_mb=1000,
             current_system_ram_mb=1010,
             peak_system_ram_mb=1020,
