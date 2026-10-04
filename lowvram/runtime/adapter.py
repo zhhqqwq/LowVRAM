@@ -1,8 +1,8 @@
 """Runtime adapter abstraction and subprocess implementation."""
 
-from abc import ABC, abstractmethod
 import subprocess
 import time
+from abc import ABC, abstractmethod
 
 import psutil
 
