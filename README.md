@@ -29,7 +29,8 @@ classification so runtime startup, missing/load failures, CPU/GPU memory exhaust
 timeouts, parse failures, and unknown errors are recorded under stable error categories.
 P1-12 adds `lowvram doctor` for non-model-executing environment readiness diagnostics.
 P1-13 adds `lowvram benchmark --dry-run` using the same pre-spawn preparation path as the
-real Orchestrator.
+real Orchestrator. P1-14 persists each real benchmark attempt under
+`runs/<run_id>/` with benchmark JSON plus stdout/stderr logs.
 
 P0 also provides strict data contracts and validation:
 
@@ -54,13 +55,14 @@ lowvram validate tests/fixtures/valid/01_dense_single_gpu_success.json
 - evidence-based P1 failure classification
 - `lowvram doctor` human/JSON readiness diagnostics
 - `lowvram benchmark --dry-run` exact-command preview
+- atomic three-file run logging under `runs/<run_id>/`
 - valid/invalid benchmark fixtures and automated tests
 - Ruff, mypy, pytest, and GitHub Actions CI
 
 ## Not implemented yet
 
-Logging, recommendation logic, aggregation, Web UI, and model downloading remain later
-work.
+Real benchmark seed generation, recommendation logic, aggregation, Web UI, and model
+downloading remain later work.
 
 ## Fixed units
 
@@ -68,4 +70,4 @@ work.
 - duration: seconds
 - throughput: tokens/sec
 
-See `docs/benchmark-dry-run.md` for P1-13.
+See `docs/run-logging.md` for P1-14.

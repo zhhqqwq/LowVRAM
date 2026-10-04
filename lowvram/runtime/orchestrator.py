@@ -1,11 +1,8 @@
-"""P1 benchmark orchestration with P1-11 failure classification."""
+"""P1 benchmark orchestration with P1-14 run logging."""
 
-import json
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
-
-from jsonschema import Draft202012Validator
 
 from lowvram.collectors import RamMonitor, VramMonitor, collect_system
 from lowvram.models.benchmark import BenchmarkResult, ErrorType
@@ -29,6 +26,10 @@ from lowvram.runtime.adapter import RuntimeSpawnError, SubprocessRuntimeAdapter
 from lowvram.runtime.command_builder import to_runtime_execution_request
 from lowvram.runtime.failure_classifier import classify_failure
 from lowvram.runtime.llama_cpp import LlamaCppRuntimeAdapter
+from lowvram.runtime.logging import (
+    persist_run_artifacts,
+    render_benchmark_orchestration_record,
+)
 from lowvram.runtime.output_parser import parse_llama_cpp_output
 from lowvram.runtime.preparation import prepare_llama_cpp_benchmark
 
@@ -36,8 +37,14 @@ from lowvram.runtime.preparation import prepare_llama_cpp_benchmark
 class BenchmarkOrchestrator:
     """Compose P1 collectors/runtime components into one benchmark attempt."""
 
-    def __init__(self, adapter: SubprocessRuntimeAdapter | None = None) -> None:
+    def __init__(
+        self,
+        adapter: SubprocessRuntimeAdapter | None = None,
+        *,
+        runs_dir: Path | None = Path("runs"),
+    ) -> None:
         self._adapter = adapter or LlamaCppRuntimeAdapter()
+        self._runs_dir = runs_dir
 
     def run(
         self,
@@ -45,7 +52,7 @@ class BenchmarkOrchestrator:
         *,
         output_path: Path | None = None,
     ) -> BenchmarkOrchestrationRecord:
-        """Run one benchmark attempt and optionally save its validated evidence JSON."""
+        """Run one benchmark attempt and persist its P1-14 run artifacts by default."""
         run_id = str(uuid4())
         timestamp = datetime.now(UTC)
 
@@ -79,6 +86,8 @@ class BenchmarkOrchestrator:
                 failure_classification=classification,
                 result=result,
             )
+            if self._runs_dir is not None:
+                persist_run_artifacts(record, self._runs_dir)
             if output_path is not None:
                 save_benchmark_orchestration_record(record, output_path)
             return record
@@ -256,14 +265,7 @@ def save_benchmark_orchestration_record(
     record: BenchmarkOrchestrationRecord,
     output_path: Path,
 ) -> None:
-    """Schema-validate serialized P1 JSON before writing it to disk."""
-    payload = record.model_dump(mode="json")
-    schema = BenchmarkOrchestrationRecord.model_json_schema()
-    Draft202012Validator.check_schema(schema)
-    Draft202012Validator(schema).validate(payload)
-
+    """Save the legacy single-file P1 evidence JSON."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(
-        json.dumps(payload, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
+    with output_path.open("w", encoding="utf-8", newline="") as handle:
+        handle.write(render_benchmark_orchestration_record(record))
