@@ -3,6 +3,10 @@
 from lowvram.models.benchmark import BenchmarkRun
 from lowvram.models.command import LlamaCppCommand, LlamaCppCommandRequest
 from lowvram.models.detection import LlamaCppDetectionResult
+from lowvram.models.dry_run import (
+    BenchmarkDryRunConfiguration,
+    BenchmarkDryRunResult,
+)
 from lowvram.models.doctor import (
     DoctorCheck,
     DoctorCheckName,
@@ -27,6 +31,10 @@ from lowvram.models.output_parser import (
     LlamaCppOutputParseResult,
     LlamaCppTimingMetrics,
 )
+from lowvram.models.preparation import (
+    BenchmarkPreparationRequest,
+    BenchmarkPreparationResult,
+)
 from lowvram.models.prompt import BenchmarkPrompt
 from lowvram.models.recipe import Recipe
 from lowvram.models.runtime import RuntimeExecutionRequest, RuntimeExecutionResult
@@ -35,6 +43,10 @@ from lowvram.models.vram import VramGPUResult, VramGPUUsage, VramMonitorResult, 
 __all__ = [
     "BenchmarkOrchestrationRecord",
     "BenchmarkOrchestratorRequest",
+    "BenchmarkDryRunConfiguration",
+    "BenchmarkDryRunResult",
+    "BenchmarkPreparationRequest",
+    "BenchmarkPreparationResult",
     "BenchmarkPrompt",
     "BenchmarkRun",
     "DoctorCheck",

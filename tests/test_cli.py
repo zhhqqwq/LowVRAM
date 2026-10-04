@@ -186,3 +186,140 @@ def test_doctor_forwards_paths_without_typer_prevalidation(monkeypatch, tmp_path
         "model_path": model,
         "output_dir": output_dir,
     }
+
+
+def _dry_run_result(*, ready: bool):
+    from lowvram.models.benchmark import ErrorType, RuntimeInfo
+    from lowvram.models.command import LlamaCppCommand
+    from lowvram.models.dry_run import (
+        BenchmarkDryRunConfiguration,
+        BenchmarkDryRunResult,
+    )
+
+    configuration = BenchmarkDryRunConfiguration(
+        context_length=4096,
+        threads=8,
+        gpu_layers=0,
+        batch_size=512,
+        temperature=0.0,
+        seed=42,
+    )
+    if ready:
+        command = LlamaCppCommand(
+            executable="/opt/llama/llama-cli",
+            arguments=("--model", "model.gguf"),
+            argv=("/opt/llama/llama-cli", "--model", "model.gguf"),
+        )
+        return BenchmarkDryRunResult(
+            ready=True,
+            runtime=RuntimeInfo(name="llama.cpp", version="b9001"),
+            model="model.gguf",
+            configuration=configuration,
+            prompt_version="v1",
+            command=command,
+        )
+    return BenchmarkDryRunResult(
+        ready=False,
+        runtime=RuntimeInfo(name="llama.cpp", version=None),
+        model="missing.gguf",
+        configuration=configuration,
+        prompt_version="v1",
+        error_type=ErrorType.MODEL_NOT_FOUND,
+        error_message="model file not found",
+    )
+
+
+def test_help_lists_benchmark_command() -> None:
+    result = runner.invoke(app, ["--help"])
+
+    assert result.exit_code == 0
+    assert "benchmark" in result.stdout
+
+
+def test_benchmark_without_dry_run_refuses_execution() -> None:
+    result = runner.invoke(app, ["benchmark"])
+
+    assert result.exit_code == 2
+    assert "use --dry-run" in result.stdout
+
+
+def test_benchmark_dry_run_human_output(monkeypatch) -> None:
+    monkeypatch.setattr(
+        lowvram.cli,
+        "build_benchmark_dry_run",
+        lambda request: _dry_run_result(ready=True),
+    )
+
+    result = runner.invoke(app, ["benchmark", "--dry-run"])
+
+    assert result.exit_code == 0
+    assert "DRY RUN READY" in result.stdout
+    assert "Runtime: llama.cpp b9001" in result.stdout
+    assert "context=4096" in result.stdout
+    assert "Prompt version: v1" in result.stdout
+    assert "Command argv:" in result.stdout
+
+
+def test_benchmark_dry_run_json_output(monkeypatch) -> None:
+    captured = {}
+
+    def fake_build(request):
+        captured["request"] = request
+        return _dry_run_result(ready=True)
+
+    monkeypatch.setattr(lowvram.cli, "build_benchmark_dry_run", fake_build)
+
+    result = runner.invoke(
+        app,
+        [
+            "benchmark",
+            "--dry-run",
+            "--model",
+            "example.gguf",
+            "--llama-cli",
+            "/custom/llama-cli",
+            "--context",
+            "8192",
+            "--threads",
+            "12",
+            "--gpu-layers",
+            "24",
+            "--batch",
+            "256",
+            "--temperature",
+            "0.25",
+            "--seed",
+            "7",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["schema_version"] == "p1.13.0"
+    assert payload["ready"] is True
+    request = captured["request"]
+    assert request.model_path == "example.gguf"
+    assert request.llama_cli == "/custom/llama-cli"
+    assert request.context_length == 8192
+    assert request.threads == 12
+    assert request.gpu_layers == 24
+    assert request.batch_size == 256
+    assert request.temperature == 0.25
+    assert request.seed == 7
+    assert request.prompt_version == "v1"
+
+
+def test_benchmark_dry_run_blocked_returns_exit_one(monkeypatch) -> None:
+    monkeypatch.setattr(
+        lowvram.cli,
+        "build_benchmark_dry_run",
+        lambda request: _dry_run_result(ready=False),
+    )
+
+    result = runner.invoke(app, ["benchmark", "--dry-run", "--json"])
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stdout)
+    assert payload["ready"] is False
+    assert payload["error_type"] == "model_not_found"

@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 import lowvram.runtime.orchestrator as orchestrator_module
+import lowvram.runtime.preparation as preparation_module
 from lowvram.models.benchmark import ErrorType
 from lowvram.models.detection import LlamaCppDetectionResult
 from lowvram.models.hardware import HardwareInfo
@@ -207,7 +208,7 @@ class FakeVramMonitor:
 def _patch_success_dependencies(monkeypatch, events: list[str]) -> None:
     monkeypatch.setattr(orchestrator_module, "collect_system", _hardware)
     monkeypatch.setattr(
-        orchestrator_module,
+        preparation_module,
         "detect_llama_cpp",
         lambda explicit_path, adapter: _detection(),
     )
@@ -331,7 +332,7 @@ def test_orchestrator_rejects_standard_prompt_override(
     adapter = FakeAdapter(events, _execution_success())
     monkeypatch.setattr(orchestrator_module, "collect_system", _hardware)
     monkeypatch.setattr(
-        orchestrator_module,
+        preparation_module,
         "detect_llama_cpp",
         lambda explicit_path, adapter: _detection(),
     )
@@ -365,7 +366,7 @@ def test_orchestrator_propagates_structured_spawn_failure(
     adapter = FailingAdapter(events, _execution_success())
     monkeypatch.setattr(orchestrator_module, "collect_system", _hardware)
     monkeypatch.setattr(
-        orchestrator_module,
+        preparation_module,
         "detect_llama_cpp",
         lambda explicit_path, adapter: _detection(),
     )
@@ -457,3 +458,37 @@ def test_orchestrator_timeout_precedence_ignores_partial_oom_text(
     assert record.result.error_type == ErrorType.TIMEOUT
     assert record.failure_classification is not None
     assert record.failure_classification.rule == "timeout.structured"
+
+
+def test_orchestrator_blocks_unrecognized_runtime_version_before_spawn(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    model_path = tmp_path / "model.gguf"
+    model_path.write_bytes(b"gguf")
+    events: list[str] = []
+    adapter = FakeAdapter(events, _execution_success())
+    monkeypatch.setattr(orchestrator_module, "collect_system", _hardware)
+    monkeypatch.setattr(
+        preparation_module,
+        "detect_llama_cpp",
+        lambda explicit_path, adapter: LlamaCppDetectionResult(
+            found=True,
+            executable="/opt/llama/llama-cli",
+            source="explicit_path",
+            candidate_name="llama-cli",
+            runnable=True,
+            version=None,
+            verified_eligible=False,
+            message="version output was not recognized",
+        ),
+    )
+
+    record = BenchmarkOrchestrator(adapter=adapter).run(_request(model_path))
+
+    assert record.result.success is False
+    assert record.result.error_type == ErrorType.UNKNOWN
+    assert "version" in (record.result.error_message or "")
+    assert record.command is None
+    assert record.execution is None
+    assert events == []

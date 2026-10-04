@@ -6,11 +6,8 @@ from pathlib import Path
 from uuid import uuid4
 
 from jsonschema import Draft202012Validator
-from pydantic import ValidationError
-
 from lowvram.collectors import RamMonitor, VramMonitor, collect_system
 from lowvram.models.benchmark import BenchmarkResult, ErrorType
-from lowvram.models.command import LlamaCppCommandRequest
 from lowvram.models.detection import LlamaCppDetectionResult
 from lowvram.models.failure import (
     FailureClassificationRequest,
@@ -24,20 +21,15 @@ from lowvram.models.orchestrator import (
     BenchmarkOrchestratorRequest,
 )
 from lowvram.models.output_parser import LlamaCppTimingMetrics
+from lowvram.models.preparation import BenchmarkPreparationRequest
 from lowvram.models.runtime import RuntimeExecutionResult
 from lowvram.models.vram import VramMonitorResult
-from lowvram.prompts import BenchmarkPromptError, load_benchmark_prompt
 from lowvram.runtime.adapter import RuntimeSpawnError, SubprocessRuntimeAdapter
-from lowvram.runtime.command_builder import (
-    build_llama_cpp_command,
-    to_runtime_execution_request,
-)
-from lowvram.runtime.detector import detect_llama_cpp
+from lowvram.runtime.command_builder import to_runtime_execution_request
 from lowvram.runtime.failure_classifier import classify_failure
 from lowvram.runtime.llama_cpp import LlamaCppRuntimeAdapter
 from lowvram.runtime.output_parser import parse_llama_cpp_output
-
-_PROMPT_OVERRIDE_FLAGS = ("-p", "--prompt", "-f", "--file", "--prompt-file")
+from lowvram.runtime.preparation import prepare_llama_cpp_benchmark
 
 
 class BenchmarkOrchestrator:
@@ -111,98 +103,46 @@ class BenchmarkOrchestrator:
                 )
             )
 
-        model_path = Path(request.model_path)
-        if not model_path.is_file():
-            return fail(
-                FailureClassificationRequest(
-                    stage=FailureStage.PREFLIGHT,
-                    model_path_exists=False,
-                    message=f"model file not found: {request.model_path}",
-                )
-            )
-
-        detection = detect_llama_cpp(
-            request.llama_cli,
-            adapter=self._adapter,
-        )
-        if not detection.found:
-            return fail(
-                FailureClassificationRequest(
-                    stage=FailureStage.RUNTIME_START,
-                    upstream_error_type=(
-                        detection.probe_error_type or ErrorType.RUNTIME_NOT_FOUND
-                    ),
-                    message=detection.message or "llama.cpp runtime was not found",
-                )
-            )
-        if not detection.runnable:
-            return fail(
-                FailureClassificationRequest(
-                    stage=FailureStage.RUNTIME_START,
-                    upstream_error_type=detection.probe_error_type or ErrorType.UNKNOWN,
-                    message=detection.message or "llama.cpp runtime is not runnable",
-                )
-            )
-        executable = detection.executable
-        if executable is None:
-            return fail(
-                FailureClassificationRequest(
-                    stage=FailureStage.INTERNAL,
-                    message="llama.cpp detection returned no executable path",
-                )
-            )
-
-        try:
-            prompt = load_benchmark_prompt(request.prompt_version)
-        except BenchmarkPromptError as exc:
-            return fail(
-                FailureClassificationRequest(
-                    stage=FailureStage.INTERNAL,
-                    message=str(exc),
-                )
-            )
-        prompt_sha256 = prompt.sha256
-
-        prompt_override = _find_prompt_override(request.configuration.extra_args)
-        if prompt_override is not None:
-            return fail(
-                FailureClassificationRequest(
-                    stage=FailureStage.PREFLIGHT,
-                    message=(
-                        "configuration.extra_args cannot override Standard Prompt: "
-                        f"{prompt_override}"
-                    ),
-                )
-            )
-
-        try:
-            command_request = LlamaCppCommandRequest(
-                executable=executable,
+        preparation = prepare_llama_cpp_benchmark(
+            BenchmarkPreparationRequest(
                 model_path=request.model_path,
+                llama_cli=request.llama_cli,
                 context_length=request.configuration.context_length,
                 threads=request.configuration.threads,
                 gpu_layers=request.configuration.gpu_layers,
                 batch_size=request.configuration.batch_size,
                 temperature=request.temperature,
                 seed=request.seed,
-                extra_args=(
-                    *request.configuration.extra_args,
-                    "--prompt",
-                    prompt.content,
-                ),
+                prompt_version=request.prompt_version,
+                extra_args=tuple(request.configuration.extra_args),
+            ),
+            adapter=self._adapter,
+        )
+        detection = preparation.detection
+        prompt_sha256 = preparation.prompt_sha256
+        command = preparation.command
+
+        if not preparation.ready:
+            return fail(
+                FailureClassificationRequest(
+                    stage=preparation.failure_stage or FailureStage.INTERNAL,
+                    upstream_error_type=preparation.error_type or ErrorType.UNKNOWN,
+                    message=preparation.error_message or "benchmark preparation failed",
+                )
             )
-            command = build_llama_cpp_command(command_request)
-            execution_request = to_runtime_execution_request(
-                command,
-                timeout_seconds=request.timeout_seconds,
-            )
-        except ValidationError as exc:
+
+        if command is None:
             return fail(
                 FailureClassificationRequest(
                     stage=FailureStage.INTERNAL,
-                    message=f"command construction failed: {exc}",
+                    message="benchmark preparation returned no command",
                 )
             )
+
+        execution_request = to_runtime_execution_request(
+            command,
+            timeout_seconds=request.timeout_seconds,
+        )
 
         try:
             session = self._adapter.spawn(execution_request)
@@ -289,15 +229,6 @@ class BenchmarkOrchestrator:
     def adapter(self) -> SubprocessRuntimeAdapter:
         """Expose the configured adapter for integration and diagnostics."""
         return self._adapter
-
-
-def _find_prompt_override(arguments: list[str]) -> str | None:
-    """Reject caller-provided prompt flags so P1-08 remains the workload source."""
-    for argument in arguments:
-        for flag in _PROMPT_OVERRIDE_FLAGS:
-            if argument == flag or argument.startswith(f"{flag}="):
-                return flag
-    return None
 
 
 def _stop_ram_monitor(monitor: RamMonitor) -> RamMonitorResult | None:
