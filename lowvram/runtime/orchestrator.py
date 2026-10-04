@@ -1,7 +1,7 @@
 """P1-10 Benchmark Orchestrator."""
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -23,7 +23,6 @@ from lowvram.models.runtime import RuntimeExecutionResult
 from lowvram.models.vram import VramMonitorResult
 from lowvram.prompts import BenchmarkPromptError, load_benchmark_prompt
 from lowvram.runtime.adapter import (
-    RuntimeProcessSession,
     RuntimeSpawnError,
     SubprocessRuntimeAdapter,
 )
@@ -52,7 +51,7 @@ class BenchmarkOrchestrator:
     ) -> BenchmarkOrchestrationRecord:
         """Run one benchmark attempt and optionally save its validated JSON record."""
         run_id = str(uuid4())
-        timestamp = datetime.now(timezone.utc)
+        timestamp = datetime.now(UTC)
 
         hardware: HardwareInfo | None = None
         detection: LlamaCppDetectionResult | None = None
