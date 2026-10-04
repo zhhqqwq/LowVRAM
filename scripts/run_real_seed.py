@@ -132,7 +132,7 @@ def _recipe(case: SeedCase, model: SeedModel, threads: int) -> Recipe:
         gpu_layers=0,
         threads=threads,
         batch_size=case.batch_size,
-        extra_args=["--n-predict", str(case.n_predict)],
+        extra_args=["--no-conversation", "--n-predict", str(case.n_predict)],
     )
 
 
@@ -152,7 +152,7 @@ def _dry_run_request(
         temperature=0.0,
         seed=42,
         prompt_version="v1",
-        extra_args=("--n-predict", str(case.n_predict)),
+        extra_args=("--no-conversation", "--n-predict", str(case.n_predict)),
     )
 
 
