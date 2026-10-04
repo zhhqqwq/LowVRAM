@@ -3,7 +3,6 @@
 import hashlib
 from importlib.resources import files
 from pathlib import Path
-from typing import cast
 
 from lowvram.models.prompt import BenchmarkPrompt, PromptVersion
 
@@ -67,7 +66,7 @@ def load_benchmark_prompt(
             f"unsupported benchmark prompt version: {version}"
         )
 
-    prompt_version = cast(PromptVersion, version)
+    prompt_version: PromptVersion = version
     expected_digest = _PROMPT_SHA256[prompt_version]
     raw = _read_prompt_bytes(prompt_version, prompt_dir)
     actual_digest = hashlib.sha256(raw).hexdigest()
