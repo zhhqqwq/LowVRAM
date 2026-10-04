@@ -8,6 +8,8 @@ import typer
 
 from lowvram.collectors import collect_system
 from lowvram.doctor import run_doctor
+from lowvram.dry_run import build_benchmark_dry_run
+from lowvram.models.preparation import BenchmarkPreparationRequest
 from lowvram.validators import DataValidationError, validate_file
 
 app = typer.Typer(
@@ -71,6 +73,96 @@ def doctor_command(
                 "Blocking checks: "
                 + ", ".join(check.value for check in result.blocking_checks)
             )
+
+    if not result.ready:
+        raise typer.Exit(code=1)
+
+
+@app.command("benchmark")
+def benchmark_command(
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Preview the exact benchmark command without running it."),
+    ] = False,
+    model: Annotated[
+        Path,
+        typer.Option("--model", help="Local GGUF model path."),
+    ] = Path("model.gguf"),
+    llama_cli: Annotated[
+        str | None,
+        typer.Option("--llama-cli", help="Explicit llama.cpp executable path."),
+    ] = None,
+    context: Annotated[
+        int,
+        typer.Option("--context", min=1, help="Context length."),
+    ] = 4096,
+    threads: Annotated[
+        int,
+        typer.Option("--threads", min=1, help="CPU thread count."),
+    ] = 8,
+    gpu_layers: Annotated[
+        int,
+        typer.Option("--gpu-layers", min=0, help="Layers offloaded to GPU."),
+    ] = 0,
+    batch: Annotated[
+        int,
+        typer.Option("--batch", min=1, help="llama.cpp batch size."),
+    ] = 512,
+    temperature: Annotated[
+        float,
+        typer.Option("--temperature", min=0.0, help="Sampling temperature."),
+    ] = 0.0,
+    seed: Annotated[
+        int,
+        typer.Option("--seed", help="Deterministic benchmark seed."),
+    ] = 42,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print only machine-readable JSON."),
+    ] = False,
+) -> None:
+    """Preview a benchmark command without executing the model."""
+    if not dry_run:
+        typer.echo("Benchmark execution CLI is not implemented in P1-13; use --dry-run.")
+        raise typer.Exit(code=2)
+
+    result = build_benchmark_dry_run(
+        BenchmarkPreparationRequest(
+            model_path=str(model),
+            llama_cli=llama_cli,
+            context_length=context,
+            threads=threads,
+            gpu_layers=gpu_layers,
+            batch_size=batch,
+            temperature=temperature,
+            seed=seed,
+            prompt_version="v1",
+        )
+    )
+
+    if json_output:
+        typer.echo(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))
+    else:
+        typer.echo("DRY RUN READY" if result.ready else "DRY RUN BLOCKED")
+        typer.echo(f"Runtime: {result.runtime.name} {result.runtime.version or 'unknown'}")
+        typer.echo(f"Model: {result.model}")
+        typer.echo(
+            "Configuration: "
+            f"context={result.configuration.context_length}, "
+            f"threads={result.configuration.threads}, "
+            f"gpu_layers={result.configuration.gpu_layers}, "
+            f"batch={result.configuration.batch_size}, "
+            f"temperature={result.configuration.temperature}, "
+            f"seed={result.configuration.seed}"
+        )
+        typer.echo(f"Prompt version: {result.prompt_version}")
+        if result.command is not None:
+            typer.echo(
+                "Command argv: "
+                + json.dumps(list(result.command.argv), ensure_ascii=False)
+            )
+        if not result.ready:
+            typer.echo(f"Error: {result.error_type}: {result.error_message}")
 
     if not result.ready:
         raise typer.Exit(code=1)

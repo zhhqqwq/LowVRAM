@@ -28,6 +28,8 @@ P1-10 provides live-PID benchmark orchestration. P1-11 adds deterministic failur
 classification so runtime startup, missing/load failures, CPU/GPU memory exhaustion, crashes,
 timeouts, parse failures, and unknown errors are recorded under stable error categories.
 P1-12 adds `lowvram doctor` for non-model-executing environment readiness diagnostics.
+P1-13 adds `lowvram benchmark --dry-run` using the same pre-spawn preparation path as the
+real Orchestrator.
 
 P0 also provides strict data contracts and validation:
 
@@ -51,13 +53,14 @@ lowvram validate tests/fixtures/valid/01_dense_single_gpu_success.json
 - live-PID benchmark orchestration with validated evidence JSON
 - evidence-based P1 failure classification
 - `lowvram doctor` human/JSON readiness diagnostics
+- `lowvram benchmark --dry-run` exact-command preview
 - valid/invalid benchmark fixtures and automated tests
 - Ruff, mypy, pytest, and GitHub Actions CI
 
 ## Not implemented yet
 
-Dry Run/logging, recommendation logic, aggregation, Web UI, and model downloading remain
-later work.
+Logging, recommendation logic, aggregation, Web UI, and model downloading remain later
+work.
 
 ## Fixed units
 
@@ -65,4 +68,4 @@ later work.
 - duration: seconds
 - throughput: tokens/sec
 
-See `docs/doctor-command.md` for P1-12.
+See `docs/benchmark-dry-run.md` for P1-13.

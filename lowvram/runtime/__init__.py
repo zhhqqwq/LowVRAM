@@ -23,6 +23,7 @@ from lowvram.runtime.orchestrator import (
     save_benchmark_orchestration_record,
 )
 from lowvram.runtime.output_parser import parse_llama_cpp_output
+from lowvram.runtime.preparation import prepare_llama_cpp_benchmark
 
 __all__ = [
     "BenchmarkOrchestrator",
@@ -38,6 +39,7 @@ __all__ = [
     "llama_cpp_candidate_names",
     "parse_llama_cpp_output",
     "parse_llama_cpp_version",
+    "prepare_llama_cpp_benchmark",
     "save_benchmark_orchestration_record",
     "to_runtime_execution_request",
 ]
