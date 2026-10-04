@@ -1,12 +1,36 @@
 # llama.cpp Command Builder — P1-07
 
-P1-07 converts normalized LowVRAM inputs into deterministic llama.cpp argv.
+P1-07 converts normalized LowVRAM inputs into one deterministic, immutable llama.cpp command
+record.
+
+## Rebaseline acceptance contract
+
+Under the restarted P1 sequence, P1-07 must cover:
+
+- model path;
+- context;
+- threads;
+- GPU layers;
+- batch size;
+- temperature;
+- seed;
+- deterministic argv ordering;
+- complete actual command recording;
+- path preservation;
+- ordered `extra_args`;
+- managed-flag conflict rejection;
+- CPU-only `gpu_layers=0`;
+- Windows/Linux path strings;
+- a canonical bridge to the P1-05 Runtime Adapter.
 
 ## Interface
 
 ```python
 from lowvram.models import LlamaCppCommandRequest
-from lowvram.runtime import build_llama_cpp_command
+from lowvram.runtime import (
+    build_llama_cpp_command,
+    to_runtime_execution_request,
+)
 
 request = LlamaCppCommandRequest(
     executable="/opt/llama.cpp/llama-cli",
@@ -17,20 +41,12 @@ request = LlamaCppCommandRequest(
     batch_size=512,
     temperature=0.8,
     seed=42,
-    extra_args=["--log-disable"],
+    extra_args=("--log-disable",),
 )
 
 command = build_llama_cpp_command(request)
+execution = to_runtime_execution_request(command, timeout_seconds=300)
 ```
-
-The returned `LlamaCppCommand` contains:
-
-- `executable`
-- `arguments`
-- `argv`
-
-`argv` is the complete actual command record and is the unambiguous execution form. P1-07
-does not convert it into a shell command string.
 
 ## Deterministic mapping
 
@@ -46,44 +62,84 @@ The managed parameters are emitted in this fixed order:
 --seed
 ```
 
-Then `extra_args` are appended in the caller-provided order.
+Then `extra_args` are appended in caller-provided order.
 
-Model and executable paths are single argv items, including paths containing spaces and
-Windows-style paths.
+The current llama.cpp CLI continues to expose the corresponding context, batch, GPU-layer,
+temperature, and seed options. LowVRAM uses the long forms above as its normalized command
+representation.
+
+## One command truth
+
+`LlamaCppCommand` records:
+
+- `executable`;
+- immutable `arguments`;
+- immutable complete `argv`.
+
+The model requires:
+
+```text
+argv == (executable, *arguments)
+```
+
+and is frozen after validation. This prevents post-validation mutation from making the saved
+full command disagree with the arguments that were originally built.
+
+`to_runtime_execution_request()` is the canonical bridge to P1-05. It derives the execution
+request directly from the immutable command record, so later orchestration does not need to
+reconstruct llama.cpp arguments independently.
+
+## Path and shell semantics
+
+Executable and model paths remain one argv item even when they contain spaces or Windows
+backslashes.
+
+P1-07 does not build a shell command string. P1-05 continues to execute the derived request
+with `shell=False`.
+
+NUL bytes are rejected because they are not valid operating-system argv/path content.
 
 ## extra_args policy
 
-`extra_args` can add llama.cpp options not managed by the request model.
+`extra_args` is stored as a tuple and the request validates assignment. Callers therefore
+cannot validate a safe request and then mutate the same object to append a managed override.
 
-It cannot repeat or override any managed parameter, including short or long aliases. For
-example, `--ctx-size`, `-c`, and `--ctx-size=8192` are rejected inside
-`extra_args`.
-
-This prevents a benchmark record from claiming one normalized configuration while the actual
-runtime receives a second conflicting value later in argv.
-
-## CPU-only
-
-`gpu_layers=0` is valid and is emitted explicitly:
+The following managed parameters and their aliases cannot appear in `extra_args`:
 
 ```text
---gpu-layers 0
+model
+context
+threads
+gpu layers
+batch
+temperature
+seed
 ```
 
-Negative GPU-layer counts are rejected by the model.
+Both exact flags and `--flag=value` forms are rejected.
+
+Distinct options that merely share a textual prefix are not rejected. For example,
+`--threads-batch` is separate from `--threads`.
+
+## Numeric boundaries
+
+- context, threads, and batch must be positive integers;
+- `gpu_layers=0` is valid for CPU-only execution;
+- negative GPU layers are invalid;
+- temperature must be finite and non-negative;
+- seed remains an integer, including `-1` when explicitly requested.
 
 ## P0 Recipe boundary
 
-P0 `Recipe` intentionally remains unchanged in P1-07. It does not contain temperature,
-seed, executable path, or model filesystem path.
+P0 `Recipe` remains unchanged. It does not contain temperature, seed, executable path, or
+model filesystem path.
 
-P1-07 therefore introduces the P1-specific `LlamaCppCommandRequest` rather than silently
-changing the P0 JSON contract. A later orchestrator can construct this request from Recipe,
-model artifact location, detected runtime, and benchmark-standard parameters.
+P1-07 continues to use the P1-specific `LlamaCppCommandRequest` rather than silently
+changing the P0 JSON contract.
 
 ## Boundary
 
-P1-07 only builds argv. It does not execute llama.cpp, add the benchmark prompt, parse
-performance output, or create Benchmark JSON.
+P1-07 builds and records argv only. It does not inject the Standard Prompt, execute the model
+workload, parse performance output, or construct Benchmark JSON.
 
-P1-08 owns the fixed Standard Prompt.
+After this rebaseline passes, P1-08 Standard Prompt is the next active Gate.
