@@ -1,6 +1,7 @@
 """P1-12 environment readiness diagnostics."""
 
 import os
+from contextlib import suppress
 import platform
 import shutil
 import sys
@@ -262,10 +263,8 @@ def _check_output_directory(output_dir: Path) -> tuple[DoctorCheck, DoctorCheck]
         write_error = exc
     finally:
         if temporary_path is not None:
-            try:
+            with suppress(OSError):
                 temporary_path.unlink()
-            except OSError:
-                pass
 
     if write_error is None:
         permissions = DoctorCheck(
