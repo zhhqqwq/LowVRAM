@@ -2,9 +2,7 @@
 
 from datetime import UTC, datetime
 
-import pytest
-
-from lowvram.benchmark_export import BenchmarkExportError, build_benchmark_run
+from lowvram.benchmark_export import build_benchmark_run
 from lowvram.models.benchmark import BenchmarkResult, ErrorType
 from lowvram.models.command import LlamaCppCommand
 from lowvram.models.detection import LlamaCppDetectionResult
