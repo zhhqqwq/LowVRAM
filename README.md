@@ -13,25 +13,26 @@ python -m pip install -e ".[dev]"
 lowvram system
 ```
 
-P1-02 provides one-shot NVIDIA state snapshots:
+P1-02 provides one-shot NVIDIA state snapshots. P1-03 adds target-process RAM monitoring.
+P1-04 adds baseline-adjusted multi-GPU VRAM monitoring:
 
 ```python
-from lowvram.collectors import collect_nvidia_snapshot
+from lowvram.collectors import RamMonitor, VramMonitor
 
-snapshot = collect_nvidia_snapshot()
+ram_monitor = RamMonitor(pid)
+vram_monitor = VramMonitor(pid)
+
+ram_monitor.start()
+vram_monitor.start()
+
+# benchmark process runs here
+
+ram_result = ram_monitor.stop()
+vram_result = vram_monitor.stop()
 ```
 
-P1-03 adds target-process RAM monitoring:
-
-```python
-from lowvram.collectors import RamMonitor
-
-monitor = RamMonitor(pid)
-monitor.start()
-result = monitor.stop()
-```
-
-The RAM monitor samples every 100 ms, follows recursively discovered child processes, and records baseline/current/peak/delta for both process-tree RSS and whole-system used RAM.
+Both monitors use a 100 ms default cadence. VRAM results retain total and per-GPU
+baseline/current/peak/delta values so pre-existing desktop VRAM is not counted as new load.
 
 P0 also provides strict data contracts and validation:
 
@@ -48,13 +49,15 @@ lowvram validate tests/fixtures/valid/01_dense_single_gpu_success.json
 - `lowvram system`
 - one-shot NVIDIA status snapshots
 - target-process RAM monitoring with child-process tracking
+- baseline-adjusted multi-GPU VRAM monitoring
 - valid/invalid benchmark fixtures and automated tests
 - Ruff, mypy, pytest, and GitHub Actions CI
 - P0 plus P1 collector/monitor documentation
 
 ## Not implemented yet
 
-Benchmark execution, llama.cpp runtime integration, VRAM time-series monitoring, performance parsing, recommendation logic, aggregation, Web UI, and model downloading remain later work.
+Benchmark execution, llama.cpp runtime integration, performance parsing, recommendation
+logic, aggregation, Web UI, and model downloading remain later work.
 
 ## Fixed units
 
@@ -62,4 +65,5 @@ Benchmark execution, llama.cpp runtime integration, VRAM time-series monitoring,
 - duration: seconds
 - throughput: tokens/sec
 
-See `docs/data-format.md`, `docs/system-collector.md`, `docs/nvidia-collector.md`, and `docs/ram-monitor.md`.
+See `docs/data-format.md`, `docs/system-collector.md`, `docs/nvidia-collector.md`,
+`docs/ram-monitor.md`, and `docs/vram-monitor.md`.
