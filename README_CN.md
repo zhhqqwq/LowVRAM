@@ -4,28 +4,36 @@ LowVRAM 是一个面向消费级硬件的开放本地 AI 模型兼容性数据�
 
 **P0 — Foundation 已完成，当前处于 P1 — Benchmark Runner。**
 
-当前 P1 已实现：
+当前 P1 已完成硬件采集、NVIDIA 快照、RAM Monitor、VRAM Monitor，并在 P1-05
+新增统一 Runtime Adapter。
 
-- P1-01：`lowvram system` 本机硬件采集
-- P1-02：一次性 NVIDIA GPU 状态快照
-- P1-03：目标进程及递归子进程 RAM Monitor
-- P1-04：带 baseline 的多 GPU VRAM Monitor
-
-P1-04 使用：
+核心接口：
 
 ```python
-from lowvram.collectors import VramMonitor
+from lowvram.models import RuntimeExecutionRequest
+from lowvram.runtime import LlamaCppRuntimeAdapter
 
-monitor = VramMonitor(pid)
-monitor.start()
-result = monitor.stop()
+adapter = LlamaCppRuntimeAdapter()
+result = adapter.execute(
+    RuntimeExecutionRequest(
+        executable="/path/to/llama-cli",
+        arguments=["--version"],
+        timeout_seconds=10,
+    )
+)
 ```
 
-第一版固定每 100ms 采样一次。结果保留总量和每 GPU 的
-baseline/current/peak/delta。整机在 Benchmark 开始前已经占用的显存作为 baseline，
-不会被计入新增显存 delta。
+P1-05 负责：
 
-多 GPU 的总 peak 使用同一采样时刻的显存总和取最大值，不把不同时间发生的各卡
-独立 peak 直接相加。无 NVIDIA 时返回合法的空 GPU / 0 值结果。
+- shell-free argv 构造
+- 外部进程启动与等待
+- stdout / stderr 捕获
+- exit code
+- timeout
+- 超时进程树终止
+- `runtime_not_found`
+- `process_crash`
+- 结构化执行结果
 
-当前仍未实现 llama.cpp 调用、Runtime Adapter、性能解析和 Benchmark 编排。
+P1-05 不自动寻找 llama.cpp；可执行文件发现属于 P1-06。它也不提前实现完整 Benchmark
+Orchestrator 或 Recipe 到 llama.cpp 参数的转换。
