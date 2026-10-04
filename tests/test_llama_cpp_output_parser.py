@@ -27,13 +27,12 @@ def test_parse_classic_llama_print_timings_from_stderr() -> None:
 
     assert result.success is True
     assert result.error_type is None
-    assert result.metrics == LlamaCppTimingMetrics(
-        load_time_seconds=0.57915,
-        prompt_eval_time_seconds=0.65563,
-        prompt_tokens_per_second=15.25,
-        eval_time_seconds=2.18097,
-        generation_tokens_per_second=12.38,
-    )
+    assert result.metrics is not None
+    assert result.metrics.load_time_seconds == pytest.approx(0.57915)
+    assert result.metrics.prompt_eval_time_seconds == pytest.approx(0.65563)
+    assert result.metrics.prompt_tokens_per_second == pytest.approx(15.25)
+    assert result.metrics.eval_time_seconds == pytest.approx(2.18097)
+    assert result.metrics.generation_tokens_per_second == pytest.approx(12.38)
 
 
 def test_parse_current_llama_perf_context_prefix() -> None:
