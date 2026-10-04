@@ -30,7 +30,8 @@ The CI validation workflow pins:
 
 Each attempt must publish the P1-14 three-file run directory. The seed runner also exports a
 path-free BenchmarkRun JSON and validates prompt/runtime identity, dry-run argv equality,
-positive finite throughput, RAM/VRAM semantics, repeatability, bounded log sizes, explicit\nload-time availability semantics, and private-path exclusion.
+positive finite throughput, RAM/VRAM semantics, repeatability, bounded log sizes, explicit
+load-time availability semantics, and private-path exclusion.
 
 The GitHub-hosted workflow is real execution evidence, not a mocked benchmark. The original
 P1-15 plan explicitly asks for runs on the developer's own computer, so CI evidence can pass
