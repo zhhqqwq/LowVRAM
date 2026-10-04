@@ -1,0 +1,1 @@
+llama_print_timings: prompt eval time = 655.63 ms / 10 tokens (65.56 ms per token, 15.25 tokens per second)
