@@ -1,11 +1,11 @@
 """P1-12 environment readiness diagnostics."""
 
-from contextlib import suppress
 import os
 import platform
 import shutil
 import sys
 import tempfile
+from contextlib import suppress
 from pathlib import Path
 
 from lowvram.collectors import collect_nvidia_snapshot, collect_system
