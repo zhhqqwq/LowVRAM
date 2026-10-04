@@ -1,4 +1,4 @@
-"""P1-10 Benchmark Orchestrator."""
+"""P1 benchmark orchestration with P1-11 failure classification."""
 
 import json
 from datetime import UTC, datetime
@@ -12,6 +12,11 @@ from lowvram.collectors import RamMonitor, VramMonitor, collect_system
 from lowvram.models.benchmark import BenchmarkResult, ErrorType
 from lowvram.models.command import LlamaCppCommandRequest
 from lowvram.models.detection import LlamaCppDetectionResult
+from lowvram.models.failure import (
+    FailureClassificationRequest,
+    FailureClassificationResult,
+    FailureStage,
+)
 from lowvram.models.hardware import HardwareInfo
 from lowvram.models.memory import RamMonitorResult
 from lowvram.models.orchestrator import (
@@ -22,15 +27,13 @@ from lowvram.models.output_parser import LlamaCppTimingMetrics
 from lowvram.models.runtime import RuntimeExecutionResult
 from lowvram.models.vram import VramMonitorResult
 from lowvram.prompts import BenchmarkPromptError, load_benchmark_prompt
-from lowvram.runtime.adapter import (
-    RuntimeSpawnError,
-    SubprocessRuntimeAdapter,
-)
+from lowvram.runtime.adapter import RuntimeSpawnError, SubprocessRuntimeAdapter
 from lowvram.runtime.command_builder import (
     build_llama_cpp_command,
     to_runtime_execution_request,
 )
 from lowvram.runtime.detector import detect_llama_cpp
+from lowvram.runtime.failure_classifier import classify_failure
 from lowvram.runtime.llama_cpp import LlamaCppRuntimeAdapter
 from lowvram.runtime.output_parser import parse_llama_cpp_output
 
@@ -38,7 +41,7 @@ _PROMPT_OVERRIDE_FLAGS = ("-p", "--prompt", "-f", "--file", "--prompt-file")
 
 
 class BenchmarkOrchestrator:
-    """Compose P1-01 and P1-03 through P1-09 into one benchmark attempt."""
+    """Compose P1 collectors/runtime components into one benchmark attempt."""
 
     def __init__(self, adapter: SubprocessRuntimeAdapter | None = None) -> None:
         self._adapter = adapter or LlamaCppRuntimeAdapter()
@@ -49,7 +52,7 @@ class BenchmarkOrchestrator:
         *,
         output_path: Path | None = None,
     ) -> BenchmarkOrchestrationRecord:
-        """Run one benchmark attempt and optionally save its validated JSON record."""
+        """Run one benchmark attempt and optionally save its validated evidence JSON."""
         run_id = str(uuid4())
         timestamp = datetime.now(UTC)
 
@@ -62,7 +65,10 @@ class BenchmarkOrchestrator:
         vram_result: VramMonitorResult | None = None
         performance: LlamaCppTimingMetrics | None = None
 
-        def finish(result: BenchmarkResult) -> BenchmarkOrchestrationRecord:
+        def finish(
+            result: BenchmarkResult,
+            classification: FailureClassificationResult | None = None,
+        ) -> BenchmarkOrchestrationRecord:
             record = BenchmarkOrchestrationRecord(
                 run_id=run_id,
                 timestamp=timestamp,
@@ -77,23 +83,41 @@ class BenchmarkOrchestrator:
                 ram=ram_result,
                 vram=vram_result,
                 performance=performance,
+                failure_classification=classification,
                 result=result,
             )
             if output_path is not None:
                 save_benchmark_orchestration_record(record, output_path)
             return record
 
+        def fail(evidence: FailureClassificationRequest) -> BenchmarkOrchestrationRecord:
+            classification = classify_failure(evidence)
+            return finish(
+                BenchmarkResult(
+                    success=False,
+                    error_type=classification.error_type,
+                    error_message=classification.message,
+                ),
+                classification,
+            )
+
         try:
             hardware = collect_system()
         except Exception as exc:
-            return finish(_failure(ErrorType.UNKNOWN, f"system collection failed: {exc}"))
+            return fail(
+                FailureClassificationRequest(
+                    stage=FailureStage.INTERNAL,
+                    message=f"system collection failed: {exc}",
+                )
+            )
 
         model_path = Path(request.model_path)
         if not model_path.is_file():
-            return finish(
-                _failure(
-                    ErrorType.MODEL_NOT_FOUND,
-                    f"model file not found: {request.model_path}",
+            return fail(
+                FailureClassificationRequest(
+                    stage=FailureStage.PREFLIGHT,
+                    model_path_exists=False,
+                    message=f"model file not found: {request.model_path}",
                 )
             )
 
@@ -102,41 +126,52 @@ class BenchmarkOrchestrator:
             adapter=self._adapter,
         )
         if not detection.found:
-            return finish(
-                _failure(
-                    detection.probe_error_type or ErrorType.RUNTIME_NOT_FOUND,
-                    detection.message or "llama.cpp runtime was not found",
+            return fail(
+                FailureClassificationRequest(
+                    stage=FailureStage.RUNTIME_START,
+                    upstream_error_type=(
+                        detection.probe_error_type or ErrorType.RUNTIME_NOT_FOUND
+                    ),
+                    message=detection.message or "llama.cpp runtime was not found",
                 )
             )
         if not detection.runnable:
-            return finish(
-                _failure(
-                    detection.probe_error_type or ErrorType.UNKNOWN,
-                    detection.message or "llama.cpp runtime is not runnable",
+            return fail(
+                FailureClassificationRequest(
+                    stage=FailureStage.RUNTIME_START,
+                    upstream_error_type=detection.probe_error_type or ErrorType.UNKNOWN,
+                    message=detection.message or "llama.cpp runtime is not runnable",
                 )
             )
         executable = detection.executable
         if executable is None:
-            return finish(
-                _failure(
-                    ErrorType.UNKNOWN,
-                    "llama.cpp detection returned no executable path",
+            return fail(
+                FailureClassificationRequest(
+                    stage=FailureStage.INTERNAL,
+                    message="llama.cpp detection returned no executable path",
                 )
             )
 
         try:
             prompt = load_benchmark_prompt(request.prompt_version)
         except BenchmarkPromptError as exc:
-            return finish(_failure(ErrorType.UNKNOWN, str(exc)))
+            return fail(
+                FailureClassificationRequest(
+                    stage=FailureStage.INTERNAL,
+                    message=str(exc),
+                )
+            )
         prompt_sha256 = prompt.sha256
 
         prompt_override = _find_prompt_override(request.configuration.extra_args)
         if prompt_override is not None:
-            return finish(
-                _failure(
-                    ErrorType.UNKNOWN,
-                    f"configuration.extra_args cannot override Standard Prompt: "
-                    f"{prompt_override}",
+            return fail(
+                FailureClassificationRequest(
+                    stage=FailureStage.PREFLIGHT,
+                    message=(
+                        "configuration.extra_args cannot override Standard Prompt: "
+                        f"{prompt_override}"
+                    ),
                 )
             )
 
@@ -162,14 +197,23 @@ class BenchmarkOrchestrator:
                 timeout_seconds=request.timeout_seconds,
             )
         except ValidationError as exc:
-            return finish(
-                _failure(ErrorType.UNKNOWN, f"command construction failed: {exc}")
+            return fail(
+                FailureClassificationRequest(
+                    stage=FailureStage.INTERNAL,
+                    message=f"command construction failed: {exc}",
+                )
             )
 
         try:
             session = self._adapter.spawn(execution_request)
         except RuntimeSpawnError as exc:
-            return finish(_failure(exc.error_type, exc.message))
+            return fail(
+                FailureClassificationRequest(
+                    stage=FailureStage.RUNTIME_START,
+                    upstream_error_type=exc.error_type,
+                    message=exc.message,
+                )
+            )
 
         ram_monitor = RamMonitor(session.pid)
         vram_monitor = VramMonitor(session.pid)
@@ -185,8 +229,11 @@ class BenchmarkOrchestrator:
             session.cancel()
             ram_result = _stop_ram_monitor(ram_monitor) if ram_started else None
             vram_result = _stop_vram_monitor(vram_monitor) if vram_started else None
-            return finish(
-                _failure(ErrorType.UNKNOWN, f"memory monitor startup failed: {exc}")
+            return fail(
+                FailureClassificationRequest(
+                    stage=FailureStage.INTERNAL,
+                    message=f"memory monitor startup failed: {exc}",
+                )
             )
 
         try:
@@ -195,23 +242,29 @@ class BenchmarkOrchestrator:
             session.cancel()
             ram_result = _stop_ram_monitor(ram_monitor)
             vram_result = _stop_vram_monitor(vram_monitor)
-            return finish(
-                _failure(ErrorType.UNKNOWN, f"runtime session wait failed: {exc}")
+            return fail(
+                FailureClassificationRequest(
+                    stage=FailureStage.INTERNAL,
+                    message=f"runtime session wait failed: {exc}",
+                )
             )
 
         try:
             ram_result = ram_monitor.stop()
             vram_result = vram_monitor.stop()
         except Exception as exc:
-            return finish(
-                _failure(ErrorType.UNKNOWN, f"memory monitor stop failed: {exc}")
+            return fail(
+                FailureClassificationRequest(
+                    stage=FailureStage.INTERNAL,
+                    message=f"memory monitor stop failed: {exc}",
+                )
             )
 
         if not execution.success:
-            return finish(
-                _failure(
-                    execution.error_type or ErrorType.UNKNOWN,
-                    execution.error_message or "runtime execution failed",
+            return fail(
+                FailureClassificationRequest(
+                    stage=FailureStage.RUNTIME_EXECUTION,
+                    execution=execution,
                 )
             )
 
@@ -220,10 +273,12 @@ class BenchmarkOrchestrator:
             stderr=execution.stderr,
         )
         if not parsed.success or parsed.metrics is None:
-            return finish(
-                _failure(
-                    parsed.error_type or ErrorType.PARSE_FAILED,
-                    parsed.error_message or "llama.cpp timing parse failed",
+            return fail(
+                FailureClassificationRequest(
+                    stage=FailureStage.OUTPUT_PARSE,
+                    execution=execution,
+                    upstream_error_type=parsed.error_type or ErrorType.PARSE_FAILED,
+                    message=parsed.error_message or "llama.cpp timing parse failed",
                 )
             )
 
@@ -234,14 +289,6 @@ class BenchmarkOrchestrator:
     def adapter(self) -> SubprocessRuntimeAdapter:
         """Expose the configured adapter for integration and diagnostics."""
         return self._adapter
-
-
-def _failure(error_type: ErrorType, message: str) -> BenchmarkResult:
-    return BenchmarkResult(
-        success=False,
-        error_type=error_type,
-        error_message=message,
-    )
 
 
 def _find_prompt_override(arguments: list[str]) -> str | None:
@@ -271,7 +318,7 @@ def save_benchmark_orchestration_record(
     record: BenchmarkOrchestrationRecord,
     output_path: Path,
 ) -> None:
-    """Schema-validate serialized P1-10 JSON before writing it to disk."""
+    """Schema-validate serialized P1 JSON before writing it to disk."""
     payload = record.model_dump(mode="json")
     schema = BenchmarkOrchestrationRecord.model_json_schema()
     Draft202012Validator.check_schema(schema)

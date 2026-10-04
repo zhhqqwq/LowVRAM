@@ -240,6 +240,7 @@ def test_orchestrator_composes_pid_monitors_parser_and_saved_json(
     )
 
     assert record.result.success is True
+    assert record.failure_classification is None
     assert events == ["spawn", "ram_start", "vram_start", "wait", "ram_stop", "vram_stop"]
     assert record.hardware == _hardware()
     assert record.detection == _detection()
@@ -264,7 +265,7 @@ def test_orchestrator_composes_pid_monitors_parser_and_saved_json(
     )
     assert loaded == record
     payload = json.loads(output_path.read_text(encoding="utf-8"))
-    assert payload["schema_version"] == "p1.10.0"
+    assert payload["schema_version"] == "p1.11.0"
 
 
 def test_orchestrator_returns_parse_failed_with_monitor_evidence(
@@ -289,6 +290,8 @@ def test_orchestrator_returns_parse_failed_with_monitor_evidence(
 
     assert record.result.success is False
     assert record.result.error_type == ErrorType.PARSE_FAILED
+    assert record.failure_classification is not None
+    assert record.failure_classification.rule == "parse_failed.structured"
     assert record.execution == bad_execution
     assert record.ram == _ram_result()
     assert record.vram == _vram_result()
@@ -309,6 +312,8 @@ def test_orchestrator_rejects_missing_model_before_spawn(
 
     assert record.result.success is False
     assert record.result.error_type == ErrorType.MODEL_NOT_FOUND
+    assert record.failure_classification is not None
+    assert record.failure_classification.rule == "model_not_found.preflight"
     assert events == []
     assert record.command is None
     assert record.execution is None
@@ -369,4 +374,86 @@ def test_orchestrator_propagates_structured_spawn_failure(
 
     assert record.result.success is False
     assert record.result.error_type == ErrorType.RUNTIME_NOT_FOUND
+    assert record.failure_classification is not None
+    assert record.failure_classification.rule == "runtime_not_found.structured"
     assert "vanished" in (record.result.error_message or "")
+
+
+@pytest.mark.parametrize(
+    ("stderr", "expected_type", "expected_rule"),
+    [
+        (
+            "ggml_cuda_error: CUDA error: out of memory\n",
+            ErrorType.OUT_OF_MEMORY,
+            "oom.cuda_error",
+        ),
+        (
+            "llama_model_load: error loading model: failed to load model\n",
+            ErrorType.MODEL_LOAD_FAILED,
+            "model_load_failed.explicit",
+        ),
+        (
+            "fatal runtime error: unexpected backend failure\n",
+            ErrorType.PROCESS_CRASH,
+            "process_crash.exit",
+        ),
+    ],
+)
+def test_orchestrator_classifies_runtime_execution_failures(
+    monkeypatch,
+    tmp_path: Path,
+    stderr: str,
+    expected_type: ErrorType,
+    expected_rule: str,
+) -> None:
+    model_path = tmp_path / "model.gguf"
+    model_path.write_bytes(b"gguf")
+    events: list[str] = []
+    failed_execution = RuntimeExecutionResult(
+        runtime_name="llama.cpp",
+        success=False,
+        exit_code=1,
+        stdout="",
+        stderr=stderr,
+        duration_seconds=1.0,
+        error_type=ErrorType.PROCESS_CRASH,
+        error_message="runtime process exited with code 1",
+    )
+    adapter = FakeAdapter(events, failed_execution)
+    _patch_success_dependencies(monkeypatch, events)
+
+    record = BenchmarkOrchestrator(adapter=adapter).run(_request(model_path))
+
+    assert record.result.success is False
+    assert record.result.error_type == expected_type
+    assert record.failure_classification is not None
+    assert record.failure_classification.rule == expected_rule
+    assert record.ram == _ram_result()
+    assert record.vram == _vram_result()
+
+
+def test_orchestrator_timeout_precedence_ignores_partial_oom_text(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    model_path = tmp_path / "model.gguf"
+    model_path.write_bytes(b"gguf")
+    events: list[str] = []
+    timed_out = RuntimeExecutionResult(
+        runtime_name="llama.cpp",
+        success=False,
+        exit_code=None,
+        stdout="",
+        stderr="CUDA error: out of memory\n",
+        duration_seconds=30.0,
+        error_type=ErrorType.TIMEOUT,
+        error_message="runtime exceeded timeout",
+    )
+    adapter = FakeAdapter(events, timed_out)
+    _patch_success_dependencies(monkeypatch, events)
+
+    record = BenchmarkOrchestrator(adapter=adapter).run(_request(model_path))
+
+    assert record.result.error_type == ErrorType.TIMEOUT
+    assert record.failure_classification is not None
+    assert record.failure_classification.rule == "timeout.structured"
