@@ -40,6 +40,48 @@ def test_nvidia_snapshot_collects_requested_fields(monkeypatch) -> None:
     assert gpu.gpu_utilization_percent == 37.0
 
 
+def test_nvidia_snapshot_uses_fixed_one_shot_query_contract(monkeypatch) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(args: list[str]) -> subprocess.CompletedProcess[str] | None:
+        calls.append(list(args))
+        if args:
+            return _completed("0, NVIDIA GPU, 8192, 1024, 25, 555.42\n")
+        return _completed("CUDA Version: 12.5\n")
+
+    monkeypatch.setattr(nvidia, "_run_nvidia_smi", fake_run)
+
+    snapshot = nvidia.collect_nvidia_snapshot()
+
+    assert snapshot.gpus[0].index == 0
+    assert calls == [
+        [
+            "--query-gpu=index,name,memory.total,memory.used,utilization.gpu,driver_version",
+            "--format=csv,noheader,nounits",
+        ],
+        [],
+    ]
+
+
+def test_nvidia_snapshot_query_failure_does_not_probe_cuda(monkeypatch) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(args: list[str]) -> subprocess.CompletedProcess[str] | None:
+        calls.append(list(args))
+        if len(calls) > 1:
+            pytest.fail("CUDA banner must not be queried after the GPU query fails")
+        return None
+
+    monkeypatch.setattr(nvidia, "_run_nvidia_smi", fake_run)
+
+    snapshot = nvidia.collect_nvidia_snapshot()
+
+    assert snapshot.gpus == []
+    assert snapshot.driver_version is None
+    assert snapshot.cuda_version is None
+    assert len(calls) == 1
+
+
 def test_nvidia_snapshot_supports_multiple_gpus_and_sorts_by_index(monkeypatch) -> None:
     def fake_run(args: list[str]) -> subprocess.CompletedProcess[str] | None:
         if args:
@@ -66,6 +108,23 @@ def test_nvidia_snapshot_treats_missing_nvidia_smi_as_empty(monkeypatch) -> None
     assert snapshot.gpus == []
     assert snapshot.driver_version is None
     assert snapshot.cuda_version is None
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        FileNotFoundError(),
+        OSError("nvidia-smi unavailable"),
+        subprocess.TimeoutExpired(cmd=["nvidia-smi"], timeout=5),
+    ],
+)
+def test_run_nvidia_smi_handles_runtime_failures(monkeypatch, error: BaseException) -> None:
+    def fail_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise error
+
+    monkeypatch.setattr(subprocess, "run", fail_run)
+
+    assert nvidia._run_nvidia_smi([]) is None
 
 
 def test_run_nvidia_smi_nonzero_exit_is_failure(monkeypatch) -> None:
