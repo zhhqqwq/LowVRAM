@@ -28,6 +28,7 @@ def test_parse_classic_llama_print_timings_from_stderr() -> None:
     assert result.success is True
     assert result.error_type is None
     assert result.metrics == LlamaCppTimingMetrics(
+        load_time_seconds=0.57915,
         prompt_eval_time_seconds=0.65563,
         prompt_tokens_per_second=15.25,
         eval_time_seconds=2.18097,
@@ -43,6 +44,7 @@ def test_parse_current_llama_perf_context_prefix() -> None:
 
     assert result.success is True
     assert result.metrics is not None
+    assert result.metrics.load_time_seconds is None
     assert result.metrics.prompt_eval_time_seconds == pytest.approx(3.84367)
     assert result.metrics.prompt_tokens_per_second == 51.25
     assert result.metrics.eval_time_seconds == pytest.approx(1.68613)
@@ -91,6 +93,7 @@ def test_duplicate_timing_blocks_choose_last_complete_block() -> None:
 
     assert result.success is True
     assert result.metrics == LlamaCppTimingMetrics(
+        load_time_seconds=None,
         prompt_eval_time_seconds=0.8,
         prompt_tokens_per_second=50.0,
         eval_time_seconds=2.4,
@@ -156,6 +159,7 @@ def test_unrelated_eval_words_are_ignored() -> None:
 @pytest.mark.parametrize(
     ("field", "value"),
     [
+        ("load_time_seconds", 0.0),
         ("prompt_eval_time_seconds", 0.0),
         ("prompt_tokens_per_second", float("inf")),
         ("eval_time_seconds", -1.0),
@@ -164,6 +168,7 @@ def test_unrelated_eval_words_are_ignored() -> None:
 )
 def test_timing_model_requires_positive_finite_values(field: str, value: float) -> None:
     values = {
+        "load_time_seconds": 0.5,
         "prompt_eval_time_seconds": 1.0,
         "prompt_tokens_per_second": 2.0,
         "eval_time_seconds": 3.0,
@@ -187,3 +192,35 @@ def test_parse_result_model_rejects_failure_without_parse_failed() -> None:
 def test_parse_result_model_rejects_success_without_metrics() -> None:
     with pytest.raises(ValidationError, match="requires metrics"):
         LlamaCppOutputParseResult(success=True)
+
+
+def test_parser_reads_direct_load_time_without_deriving_it() -> None:
+    result = parse_llama_cpp_output(
+        stdout="",
+        stderr=(
+            "llama_perf_context_print: load time = 250.00 ms\n"
+            "llama_perf_context_print: prompt eval time = 100.00 ms / 10 tokens "
+            "(10.00 ms per token, 100.00 tokens per second)\n"
+            "llama_perf_context_print: eval time = 200.00 ms / 20 runs "
+            "(10.00 ms per token, 100.00 tokens per second)\n"
+        ),
+    )
+    assert result.success is True
+    assert result.metrics is not None
+    assert result.metrics.load_time_seconds == 0.25
+
+
+def test_malformed_load_time_does_not_fabricate_value() -> None:
+    result = parse_llama_cpp_output(
+        stdout="",
+        stderr=(
+            "llama_perf_context_print: load time = nan ms\n"
+            "llama_perf_context_print: prompt eval time = 100.00 ms / 10 tokens "
+            "(10.00 ms per token, 100.00 tokens per second)\n"
+            "llama_perf_context_print: eval time = 200.00 ms / 20 runs "
+            "(10.00 ms per token, 100.00 tokens per second)\n"
+        ),
+    )
+    assert result.success is True
+    assert result.metrics is not None
+    assert result.metrics.load_time_seconds is None

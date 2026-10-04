@@ -36,3 +36,19 @@ Successful runs require all P0 metrics: peak VRAM, peak RAM, load time, prompt t
 ## Recipe
 
 A recipe records `model_id`, `runtime`, `context_length`, `gpu_layers`, `kv_cache_type`, `threads`, `batch_size`, and `extra_args`. P0 defines the contract only; it does not construct or execute a llama.cpp command.
+
+
+## P1-15 Benchmark contract update
+
+P1-15 adds `prompt_version` to every public Benchmark record so performance cannot be
+detached from the fixed workload identity. The Benchmark schema version is now `1.1.0`.
+
+Successful exported Benchmark records use only directly observed values:
+
+- `load_time_seconds` comes from llama.cpp's printed `load time`;
+- `peak_ram_mb` comes from the target process-tree RAM peak;
+- CPU-only runs record `peak_vram_mb=0`;
+- NVIDIA runs require attributable process VRAM before a successful public record is emitted.
+
+Local executable/model paths stay in private `runs/<run_id>/` evidence and are intentionally
+omitted from the public Benchmark contract.

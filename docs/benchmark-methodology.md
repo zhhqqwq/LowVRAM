@@ -21,3 +21,16 @@ Do not manually alter measured performance or memory values to make a run appear
 ## P0 limitation
 
 P0 fixtures are synthetic contract examples, not real performance claims. Runtime execution, monitoring, parsing, standard prompts, and verified benchmark generation belong to P1.
+
+
+## P1-15 metric provenance
+
+P1-15 resolves the successful-run `load_time_seconds` contract by parsing llama.cpp's
+directly printed `load time` value. Total process duration must not be substituted for model
+load time.
+
+Public Benchmark export uses process-tree peak RAM. CPU-only runs have an observed VRAM peak
+of zero. On NVIDIA systems, a successful public Benchmark requires process-attributed VRAM;
+whole-GPU desktop/background usage is not substituted when attribution is unavailable.
+
+Every exported P1-15 Benchmark records `prompt_version`.

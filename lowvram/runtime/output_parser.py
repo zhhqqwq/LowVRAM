@@ -10,11 +10,13 @@ from lowvram.models.output_parser import (
     LlamaCppTimingMetrics,
 )
 
+_LOAD_LABEL = re.compile(r"\bload\s+time\b", re.IGNORECASE)
 _PROMPT_LABEL = re.compile(r"\bprompt\s+eval\s+time\b", re.IGNORECASE)
 _EVAL_LABEL = re.compile(
     r"\b(?:(?:generation|token\s+generation)\s+)?eval\s+time\b",
     re.IGNORECASE,
 )
+_LOAD_TIME_VALUE = re.compile(r"=\s*(?P<time_ms>\S+)\s*ms\b", re.IGNORECASE)
 _TIMING_VALUES = re.compile(
     r"=\s*(?P<time_ms>\S+)\s*ms\b"
     r".*?"
@@ -32,8 +34,20 @@ class _TimingLine:
 
 @dataclass(frozen=True)
 class _TimingBlock:
+    load_time_seconds: float | None
     prompt: _TimingLine
     generation: _TimingLine
+
+
+def _parse_load_time_line(line: str) -> float | None:
+    """Extract a directly printed positive finite llama.cpp load time."""
+    match = _LOAD_TIME_VALUE.search(line)
+    if match is None:
+        return None
+    time_ms = _parse_positive_finite(match.group("time_ms"))
+    if time_ms is None:
+        return None
+    return time_ms / 1000.0
 
 
 def _is_prompt_timing_line(line: str) -> bool:
@@ -76,12 +90,17 @@ def _parse_timing_line(line: str) -> _TimingLine | None:
 
 def _parse_latest_complete_block(text: str) -> _TimingBlock | None:
     """Return the final complete prompt/eval block when the latest block is valid."""
+    latest_load_time_seconds: float | None = None
     pending_prompt: _TimingLine | None = None
     latest_complete: _TimingBlock | None = None
     latest_timing_sequence_complete = False
     saw_timing_label = False
 
     for line in text.splitlines():
+        if _LOAD_LABEL.search(line) is not None:
+            latest_load_time_seconds = _parse_load_time_line(line)
+            continue
+
         if _is_prompt_timing_line(line):
             saw_timing_label = True
             pending_prompt = _parse_timing_line(line)
@@ -95,6 +114,7 @@ def _parse_latest_complete_block(text: str) -> _TimingBlock | None:
         generation = _parse_timing_line(line)
         if pending_prompt is not None and generation is not None:
             latest_complete = _TimingBlock(
+                load_time_seconds=latest_load_time_seconds,
                 prompt=pending_prompt,
                 generation=generation,
             )
@@ -133,6 +153,7 @@ def parse_llama_cpp_output(
     return LlamaCppOutputParseResult(
         success=True,
         metrics=LlamaCppTimingMetrics(
+            load_time_seconds=block.load_time_seconds,
             prompt_eval_time_seconds=block.prompt.time_seconds,
             prompt_tokens_per_second=block.prompt.tokens_per_second,
             eval_time_seconds=block.generation.time_seconds,

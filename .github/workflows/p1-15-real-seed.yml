@@ -1,0 +1,118 @@
+name: P1-15 Real Seed
+
+on:
+  push:
+    branches:
+      - p1-15-real-benchmark-seed
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install LowVRAM
+        run: python -m pip install -e ".[dev]"
+
+      - name: Prepare directories
+        run: mkdir -p tools/llama models p1-15-seed/runs p1-15-seed/benchmarks
+
+      - name: Download pinned llama.cpp CPU binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 5 --retry-all-errors \
+            -o tools/llama.tar.gz \
+            https://github.com/ggml-org/llama.cpp/releases/download/b10336/llama-b10336-bin-ubuntu-x64.tar.gz
+          echo "c971b6f91fe3a0e3d9b77f85e7a4973a59c89f1e1799dc743f995d6e9cbdf4fd  tools/llama.tar.gz" | sha256sum -c -
+          tar -xzf tools/llama.tar.gz -C tools/llama
+          LLAMA_CLI="$(find "$PWD/tools/llama" -type f -name llama-cli -print -quit)"
+          test -n "$LLAMA_CLI"
+          chmod +x "$LLAMA_CLI"
+          export LD_LIBRARY_PATH="$(dirname "$LLAMA_CLI"):${LD_LIBRARY_PATH:-}"
+          echo "LLAMA_CLI=$LLAMA_CLI" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH" >> "$GITHUB_ENV"
+          "$LLAMA_CLI" --version
+
+      - name: Download pinned GGUF models
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 5 --retry-all-errors \
+            -o models/smollm2-q4_k_m.gguf \
+            "https://huggingface.co/QuantFactory/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct.Q4_K_M.gguf?download=true"
+          echo "8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684  models/smollm2-q4_k_m.gguf" | sha256sum -c -
+          curl -fL --retry 5 --retry-all-errors \
+            -o models/qwen2.5-0.5b-q4_0.gguf \
+            "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_0.gguf?download=true"
+          echo "7671c0c304e6ce5a7fc577bcb12aba01e2c155cc2efd29b2213c95b18edaf6ed  models/qwen2.5-0.5b-q4_0.gguf" | sha256sum -c -
+
+      - name: Record download provenance
+        run: |
+          cat > p1-15-seed/downloads.sha256 <<'EOF'
+          c971b6f91fe3a0e3d9b77f85e7a4973a59c89f1e1799dc743f995d6e9cbdf4fd  llama-b10336-bin-ubuntu-x64.tar.gz
+          8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684  SmolLM2-135M-Instruct.Q4_K_M.gguf
+          7671c0c304e6ce5a7fc577bcb12aba01e2c155cc2efd29b2213c95b18edaf6ed  qwen2.5-0.5b-instruct-q4_0.gguf
+          EOF
+
+      - name: Environment audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          THREADS="$(python -c 'import os; print(max(1, min(4, os.cpu_count() or 1)))')"
+          echo "SEED_THREADS=$THREADS" >> "$GITHUB_ENV"
+          lowvram system > p1-15-seed/system.json
+          lowvram doctor \
+            --llama-cli "$LLAMA_CLI" \
+            --model models/smollm2-q4_k_m.gguf \
+            --output-dir p1-15-seed/runs \
+            --json > p1-15-seed/doctor.json
+          lowvram benchmark --dry-run \
+            --model models/smollm2-q4_k_m.gguf \
+            --llama-cli "$LLAMA_CLI" \
+            --context 1024 \
+            --threads "$THREADS" \
+            --gpu-layers 0 \
+            --batch 128 \
+            --temperature 0 \
+            --seed 42 \
+            --json > p1-15-seed/dry-run-smollm.json
+
+      - name: Execute real seed matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/run_real_seed.py \
+            --llama-cli "$LLAMA_CLI" \
+            --smollm models/smollm2-q4_k_m.gguf \
+            --qwen models/qwen2.5-0.5b-q4_0.gguf \
+            --output-dir p1-15-seed/runs \
+            --benchmark-dir p1-15-seed/benchmarks \
+            --report-json p1-15-seed/p1-15-report.json \
+            --report-md p1-15-seed/p1-15-report.md \
+            --environment-source github-actions-hosted \
+            --threads "$SEED_THREADS"
+
+      - name: Show acceptance report
+        if: always()
+        run: |
+          if [ -f p1-15-seed/p1-15-report.md ]; then
+            cat p1-15-seed/p1-15-report.md
+          fi
+
+      - name: Upload real-seed evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-15-real-seed
+          path: p1-15-seed/
+          retention-days: 14

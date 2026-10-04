@@ -11,10 +11,11 @@ PositiveFiniteFloat = Annotated[float, Field(gt=0, allow_inf_nan=False)]
 
 
 class LlamaCppTimingMetrics(StrictModel):
-    """Four timing metrics parsed directly from one complete llama.cpp timing block."""
+    """Timing metrics parsed directly from one complete llama.cpp timing block."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+    load_time_seconds: PositiveFiniteFloat | None = None
     prompt_eval_time_seconds: PositiveFiniteFloat
     prompt_tokens_per_second: PositiveFiniteFloat
     eval_time_seconds: PositiveFiniteFloat

@@ -9,6 +9,7 @@ from pydantic import Field, model_validator
 from lowvram.models.base import NonNegativeFloat, NonNegativeInt, StrictModel
 from lowvram.models.hardware import HardwareInfo
 from lowvram.models.model import ModelInfo
+from lowvram.models.prompt import PromptVersion
 from lowvram.models.recipe import Recipe
 
 
@@ -76,12 +77,13 @@ class VerificationInfo(StrictModel):
 class BenchmarkRun(StrictModel):
     """Self-contained benchmark record supporting both success and failure runs."""
 
-    schema_version: Literal["1.0.0"] = "1.0.0"
+    schema_version: Literal["1.1.0"] = "1.1.0"
     run_id: str = Field(min_length=1)
     timestamp: datetime
     hardware: HardwareInfo
     model: ModelInfo
     runtime: RuntimeInfo
+    prompt_version: PromptVersion
     configuration: Recipe
     memory: MemoryMetrics
     performance: PerformanceMetrics
