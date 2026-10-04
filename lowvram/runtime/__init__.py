@@ -18,6 +18,11 @@ from lowvram.runtime.detector import (
 )
 from lowvram.runtime.failure_classifier import classify_failure
 from lowvram.runtime.llama_cpp import LlamaCppRuntimeAdapter
+from lowvram.runtime.logging import (
+    RunArtifactPaths,
+    RunLoggingError,
+    persist_run_artifacts,
+)
 from lowvram.runtime.orchestrator import (
     BenchmarkOrchestrator,
     save_benchmark_orchestration_record,
@@ -28,6 +33,8 @@ from lowvram.runtime.preparation import prepare_llama_cpp_benchmark
 __all__ = [
     "BenchmarkOrchestrator",
     "LlamaCppRuntimeAdapter",
+    "RunArtifactPaths",
+    "RunLoggingError",
     "RuntimeAdapter",
     "RuntimeProcessSession",
     "RuntimeSessionStateError",
@@ -39,6 +46,7 @@ __all__ = [
     "llama_cpp_candidate_names",
     "parse_llama_cpp_output",
     "parse_llama_cpp_version",
+    "persist_run_artifacts",
     "prepare_llama_cpp_benchmark",
     "save_benchmark_orchestration_record",
     "to_runtime_execution_request",

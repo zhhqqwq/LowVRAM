@@ -235,7 +235,7 @@ def test_orchestrator_composes_pid_monitors_parser_and_saved_json(
     adapter = FakeAdapter(events, _execution_success())
     _patch_success_dependencies(monkeypatch, events)
 
-    record = BenchmarkOrchestrator(adapter=adapter).run(
+    record = BenchmarkOrchestrator(adapter=adapter, runs_dir=None).run(
         _request(model_path),
         output_path=output_path,
     )
@@ -287,7 +287,7 @@ def test_orchestrator_returns_parse_failed_with_monitor_evidence(
     adapter = FakeAdapter(events, bad_execution)
     _patch_success_dependencies(monkeypatch, events)
 
-    record = BenchmarkOrchestrator(adapter=adapter).run(_request(model_path))
+    record = BenchmarkOrchestrator(adapter=adapter, runs_dir=None).run(_request(model_path))
 
     assert record.result.success is False
     assert record.result.error_type == ErrorType.PARSE_FAILED
@@ -307,7 +307,7 @@ def test_orchestrator_rejects_missing_model_before_spawn(
     adapter = FakeAdapter(events, _execution_success())
     monkeypatch.setattr(orchestrator_module, "collect_system", _hardware)
 
-    record = BenchmarkOrchestrator(adapter=adapter).run(
+    record = BenchmarkOrchestrator(adapter=adapter, runs_dir=None).run(
         _request(tmp_path / "missing.gguf")
     )
 
@@ -337,7 +337,7 @@ def test_orchestrator_rejects_standard_prompt_override(
         lambda explicit_path, adapter: _detection(),
     )
 
-    record = BenchmarkOrchestrator(adapter=adapter).run(
+    record = BenchmarkOrchestrator(adapter=adapter, runs_dir=None).run(
         _request(model_path, extra_args=[flag])
     )
 
@@ -371,7 +371,7 @@ def test_orchestrator_propagates_structured_spawn_failure(
         lambda explicit_path, adapter: _detection(),
     )
 
-    record = BenchmarkOrchestrator(adapter=adapter).run(_request(model_path))
+    record = BenchmarkOrchestrator(adapter=adapter, runs_dir=None).run(_request(model_path))
 
     assert record.result.success is False
     assert record.result.error_type == ErrorType.RUNTIME_NOT_FOUND
@@ -423,7 +423,7 @@ def test_orchestrator_classifies_runtime_execution_failures(
     adapter = FakeAdapter(events, failed_execution)
     _patch_success_dependencies(monkeypatch, events)
 
-    record = BenchmarkOrchestrator(adapter=adapter).run(_request(model_path))
+    record = BenchmarkOrchestrator(adapter=adapter, runs_dir=None).run(_request(model_path))
 
     assert record.result.success is False
     assert record.result.error_type == expected_type
@@ -453,7 +453,7 @@ def test_orchestrator_timeout_precedence_ignores_partial_oom_text(
     adapter = FakeAdapter(events, timed_out)
     _patch_success_dependencies(monkeypatch, events)
 
-    record = BenchmarkOrchestrator(adapter=adapter).run(_request(model_path))
+    record = BenchmarkOrchestrator(adapter=adapter, runs_dir=None).run(_request(model_path))
 
     assert record.result.error_type == ErrorType.TIMEOUT
     assert record.failure_classification is not None
@@ -484,7 +484,7 @@ def test_orchestrator_blocks_unrecognized_runtime_version_before_spawn(
         ),
     )
 
-    record = BenchmarkOrchestrator(adapter=adapter).run(_request(model_path))
+    record = BenchmarkOrchestrator(adapter=adapter, runs_dir=None).run(_request(model_path))
 
     assert record.result.success is False
     assert record.result.error_type == ErrorType.UNKNOWN
@@ -492,3 +492,78 @@ def test_orchestrator_blocks_unrecognized_runtime_version_before_spawn(
     assert record.command is None
     assert record.execution is None
     assert events == []
+
+
+def test_orchestrator_persists_default_run_artifacts(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    model_path = tmp_path / "model.gguf"
+    model_path.write_bytes(b"gguf")
+    runs_dir = tmp_path / "runs"
+    events: list[str] = []
+    adapter = FakeAdapter(events, _execution_success())
+    _patch_success_dependencies(monkeypatch, events)
+
+    record = BenchmarkOrchestrator(adapter=adapter, runs_dir=runs_dir).run(
+        _request(model_path)
+    )
+
+    run_dir = runs_dir / record.run_id
+    assert sorted(path.name for path in run_dir.iterdir()) == [
+        "benchmark.json",
+        "stderr.log",
+        "stdout.log",
+    ]
+    assert BenchmarkOrchestrationRecord.model_validate_json(
+        (run_dir / "benchmark.json").read_text(encoding="utf-8")
+    ) == record
+    assert (run_dir / "stdout.log").read_text(encoding="utf-8") == record.execution.stdout
+    assert (run_dir / "stderr.log").read_text(encoding="utf-8") == record.execution.stderr
+
+
+@pytest.mark.parametrize(
+    "execution",
+    [
+        RuntimeExecutionResult(
+            runtime_name="llama.cpp",
+            success=False,
+            exit_code=7,
+            stdout="partial output\n",
+            stderr="fatal runtime error\n",
+            duration_seconds=1.0,
+            error_type=ErrorType.PROCESS_CRASH,
+            error_message="runtime process exited with code 7",
+        ),
+        RuntimeExecutionResult(
+            runtime_name="llama.cpp",
+            success=False,
+            exit_code=None,
+            stdout="partial before timeout\n",
+            stderr="timeout diagnostics\n",
+            duration_seconds=30.0,
+            error_type=ErrorType.TIMEOUT,
+            error_message="runtime exceeded timeout",
+        ),
+    ],
+)
+def test_orchestrator_persists_crash_and_timeout_logs(
+    monkeypatch,
+    tmp_path: Path,
+    execution: RuntimeExecutionResult,
+) -> None:
+    model_path = tmp_path / "model.gguf"
+    model_path.write_bytes(b"gguf")
+    runs_dir = tmp_path / "runs"
+    events: list[str] = []
+    adapter = FakeAdapter(events, execution)
+    _patch_success_dependencies(monkeypatch, events)
+
+    record = BenchmarkOrchestrator(adapter=adapter, runs_dir=runs_dir).run(
+        _request(model_path)
+    )
+
+    run_dir = runs_dir / record.run_id
+    assert record.result.success is False
+    assert (run_dir / "stdout.log").read_text(encoding="utf-8") == execution.stdout
+    assert (run_dir / "stderr.log").read_text(encoding="utf-8") == execution.stderr
