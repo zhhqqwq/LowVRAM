@@ -27,6 +27,7 @@ It does not derive missing tokens/sec values.
 P1-10 provides live-PID benchmark orchestration. P1-11 adds deterministic failure
 classification so runtime startup, missing/load failures, CPU/GPU memory exhaustion, crashes,
 timeouts, parse failures, and unknown errors are recorded under stable error categories.
+P1-12 adds `lowvram doctor` for non-model-executing environment readiness diagnostics.
 
 P0 also provides strict data contracts and validation:
 
@@ -49,13 +50,14 @@ lowvram validate tests/fixtures/valid/01_dense_single_gpu_success.json
 - structured llama.cpp timing-output parser
 - live-PID benchmark orchestration with validated evidence JSON
 - evidence-based P1 failure classification
+- `lowvram doctor` human/JSON readiness diagnostics
 - valid/invalid benchmark fixtures and automated tests
 - Ruff, mypy, pytest, and GitHub Actions CI
 
 ## Not implemented yet
 
-Doctor/Dry Run/logging, recommendation logic, aggregation, Web UI, and model downloading
-remain later work.
+Dry Run/logging, recommendation logic, aggregation, Web UI, and model downloading remain
+later work.
 
 ## Fixed units
 
@@ -63,4 +65,4 @@ remain later work.
 - duration: seconds
 - throughput: tokens/sec
 
-See `docs/failure-classification.md` for P1-11.
+See `docs/doctor-command.md` for P1-12.

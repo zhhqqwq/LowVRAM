@@ -3,6 +3,12 @@
 from lowvram.models.benchmark import BenchmarkRun
 from lowvram.models.command import LlamaCppCommand, LlamaCppCommandRequest
 from lowvram.models.detection import LlamaCppDetectionResult
+from lowvram.models.doctor import (
+    DoctorCheck,
+    DoctorCheckName,
+    DoctorCheckStatus,
+    DoctorResult,
+)
 from lowvram.models.failure import (
     FailureClassificationRequest,
     FailureClassificationResult,
@@ -31,6 +37,10 @@ __all__ = [
     "BenchmarkOrchestratorRequest",
     "BenchmarkPrompt",
     "BenchmarkRun",
+    "DoctorCheck",
+    "DoctorCheckName",
+    "DoctorCheckStatus",
+    "DoctorResult",
     "FailureClassificationRequest",
     "FailureClassificationResult",
     "FailureEvidenceSource",
