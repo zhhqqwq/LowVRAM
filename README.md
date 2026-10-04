@@ -8,17 +8,21 @@ LowVRAM is an open local-AI model compatibility database for consumer hardware. 
 
 P1-01 through P1-04 provide hardware inventory plus RAM/VRAM measurement. P1-05 provides the
 external process execution boundary. P1-06 discovers and version-probes llama.cpp. P1-07
-builds deterministic llama.cpp argv. P1-08 provides the fixed Standard Prompt:
+builds deterministic llama.cpp argv. P1-08 provides the fixed Standard Prompt. P1-09 parses
+llama.cpp prompt/generation timing output into structured metrics:
 
 ```python
-from lowvram.prompts import load_benchmark_prompt
+from lowvram.runtime import parse_llama_cpp_output
 
-prompt = load_benchmark_prompt()
+parsed = parse_llama_cpp_output(
+    stdout=execution.stdout,
+    stderr=execution.stderr,
+)
 ```
 
-The canonical `benchmark_prompts/v1.txt` asset is versioned as `v1` and pinned by SHA-256.
-The loader refuses missing, unknown, or modified prompt content so benchmark inputs cannot
-silently drift between runs.
+The parser consumes explicit llama.cpp timing values, normalizes printed milliseconds to
+seconds, and returns `parse_failed` for partial, malformed, non-finite, or incomplete output.
+It does not derive missing tokens/sec values.
 
 P0 also provides strict data contracts and validation:
 
@@ -38,13 +42,14 @@ lowvram validate tests/fixtures/valid/01_dense_single_gpu_success.json
 - llama.cpp explicit-path/PATH discovery and version detection
 - deterministic llama.cpp command building
 - versioned, integrity-pinned Standard Prompt
+- structured llama.cpp timing-output parser
 - valid/invalid benchmark fixtures and automated tests
 - Ruff, mypy, pytest, and GitHub Actions CI
 
 ## Not implemented yet
 
-Performance parsing, benchmark orchestration, recommendation logic, aggregation, Web UI, and
-model downloading remain later work.
+Benchmark orchestration, recommendation logic, aggregation, Web UI, and model downloading
+remain later work.
 
 ## Fixed units
 
@@ -52,4 +57,4 @@ model downloading remain later work.
 - duration: seconds
 - throughput: tokens/sec
 
-See `docs/standard-prompt.md` for P1-08.
+See `docs/llama-cpp-output-parser.md` for P1-09.

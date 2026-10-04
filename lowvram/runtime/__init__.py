@@ -1,4 +1,4 @@
-"""Runtime adapter, detector, and command-builder public API."""
+"""Runtime adapter, detector, command-builder, and parser public API."""
 
 from lowvram.runtime.adapter import RuntimeAdapter, SubprocessRuntimeAdapter
 from lowvram.runtime.command_builder import (
@@ -11,6 +11,7 @@ from lowvram.runtime.detector import (
     parse_llama_cpp_version,
 )
 from lowvram.runtime.llama_cpp import LlamaCppRuntimeAdapter
+from lowvram.runtime.output_parser import parse_llama_cpp_output
 
 __all__ = [
     "LlamaCppRuntimeAdapter",
@@ -19,6 +20,7 @@ __all__ = [
     "build_llama_cpp_command",
     "detect_llama_cpp",
     "llama_cpp_candidate_names",
+    "parse_llama_cpp_output",
     "parse_llama_cpp_version",
     "to_runtime_execution_request",
 ]

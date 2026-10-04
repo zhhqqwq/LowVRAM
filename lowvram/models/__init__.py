@@ -7,6 +7,10 @@ from lowvram.models.hardware import HardwareInfo
 from lowvram.models.memory import RamMonitorResult, RamSample
 from lowvram.models.model import ModelInfo
 from lowvram.models.nvidia import NvidiaGPUStatus, NvidiaSnapshot
+from lowvram.models.output_parser import (
+    LlamaCppOutputParseResult,
+    LlamaCppTimingMetrics,
+)
 from lowvram.models.prompt import BenchmarkPrompt
 from lowvram.models.recipe import Recipe
 from lowvram.models.runtime import RuntimeExecutionRequest, RuntimeExecutionResult
@@ -19,6 +23,8 @@ __all__ = [
     "LlamaCppCommand",
     "LlamaCppCommandRequest",
     "LlamaCppDetectionResult",
+    "LlamaCppOutputParseResult",
+    "LlamaCppTimingMetrics",
     "ModelInfo",
     "NvidiaGPUStatus",
     "NvidiaSnapshot",
