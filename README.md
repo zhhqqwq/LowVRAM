@@ -24,6 +24,10 @@ The parser consumes explicit llama.cpp timing values, normalizes printed millise
 seconds, and returns `parse_failed` for partial, malformed, non-finite, or incomplete output.
 It does not derive missing tokens/sec values.
 
+P1-10 provides live-PID benchmark orchestration. P1-11 adds deterministic failure
+classification so runtime startup, missing/load failures, CPU/GPU memory exhaustion, crashes,
+timeouts, parse failures, and unknown errors are recorded under stable error categories.
+
 P0 also provides strict data contracts and validation:
 
 ```bash
@@ -43,12 +47,14 @@ lowvram validate tests/fixtures/valid/01_dense_single_gpu_success.json
 - deterministic llama.cpp command building
 - versioned, integrity-pinned Standard Prompt
 - structured llama.cpp timing-output parser
+- live-PID benchmark orchestration with validated evidence JSON
+- evidence-based P1 failure classification
 - valid/invalid benchmark fixtures and automated tests
 - Ruff, mypy, pytest, and GitHub Actions CI
 
 ## Not implemented yet
 
-Benchmark orchestration, recommendation logic, aggregation, Web UI, and model downloading
+Doctor/Dry Run/logging, recommendation logic, aggregation, Web UI, and model downloading
 remain later work.
 
 ## Fixed units
@@ -57,4 +63,4 @@ remain later work.
 - duration: seconds
 - throughput: tokens/sec
 
-See `docs/benchmark-orchestrator.md` for P1-10.
+See `docs/failure-classification.md` for P1-11.

@@ -3,6 +3,12 @@
 from lowvram.models.benchmark import BenchmarkRun
 from lowvram.models.command import LlamaCppCommand, LlamaCppCommandRequest
 from lowvram.models.detection import LlamaCppDetectionResult
+from lowvram.models.failure import (
+    FailureClassificationRequest,
+    FailureClassificationResult,
+    FailureEvidenceSource,
+    FailureStage,
+)
 from lowvram.models.hardware import HardwareInfo
 from lowvram.models.memory import RamMonitorResult, RamSample
 from lowvram.models.model import ModelInfo
@@ -25,6 +31,10 @@ __all__ = [
     "BenchmarkOrchestratorRequest",
     "BenchmarkPrompt",
     "BenchmarkRun",
+    "FailureClassificationRequest",
+    "FailureClassificationResult",
+    "FailureEvidenceSource",
+    "FailureStage",
     "HardwareInfo",
     "LlamaCppCommand",
     "LlamaCppCommandRequest",

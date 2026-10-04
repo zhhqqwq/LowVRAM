@@ -16,6 +16,7 @@ from lowvram.runtime.detector import (
     llama_cpp_candidate_names,
     parse_llama_cpp_version,
 )
+from lowvram.runtime.failure_classifier import classify_failure
 from lowvram.runtime.llama_cpp import LlamaCppRuntimeAdapter
 from lowvram.runtime.orchestrator import (
     BenchmarkOrchestrator,
@@ -32,6 +33,7 @@ __all__ = [
     "RuntimeSpawnError",
     "SubprocessRuntimeAdapter",
     "build_llama_cpp_command",
+    "classify_failure",
     "detect_llama_cpp",
     "llama_cpp_candidate_names",
     "parse_llama_cpp_output",

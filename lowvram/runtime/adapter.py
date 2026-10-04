@@ -23,6 +23,12 @@ _RUNTIME_UNAVAILABLE_WINERRORS = {
     5,    # ERROR_ACCESS_DENIED
     193,  # ERROR_BAD_EXE_FORMAT
 }
+_OUT_OF_MEMORY_ERRNOS = {errno.ENOMEM}
+_OUT_OF_MEMORY_WINERRORS = {
+    8,     # ERROR_NOT_ENOUGH_MEMORY
+    14,    # ERROR_OUTOFMEMORY
+    1455,  # ERROR_COMMITMENT_LIMIT
+}
 
 
 class RuntimeSessionStateError(RuntimeError):
@@ -189,6 +195,8 @@ class SubprocessRuntimeAdapter(RuntimeAdapter):
             error_type = _classify_start_error(exc)
             if error_type == ErrorType.RUNTIME_NOT_FOUND:
                 message = f"runtime executable unavailable: {request.executable}: {exc}"
+            elif error_type == ErrorType.OUT_OF_MEMORY:
+                message = f"runtime process could not start due to memory exhaustion: {exc}"
             else:
                 message = f"runtime process could not be started: {exc}"
             raise RuntimeSpawnError(
@@ -231,6 +239,8 @@ def _classify_start_error(exc: OSError) -> ErrorType:
         or winerror in _RUNTIME_UNAVAILABLE_WINERRORS
     ):
         return ErrorType.RUNTIME_NOT_FOUND
+    if exc.errno in _OUT_OF_MEMORY_ERRNOS or winerror in _OUT_OF_MEMORY_WINERRORS:
+        return ErrorType.OUT_OF_MEMORY
     return ErrorType.UNKNOWN
 
 

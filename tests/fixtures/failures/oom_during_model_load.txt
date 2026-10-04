@@ -1,0 +1,1 @@
+llama_model_load: failed to load model\nggml_cuda_error: CUDA error: out of memory\n

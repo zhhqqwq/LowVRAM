@@ -1,4 +1,4 @@
-"""P1-10 Benchmark Orchestrator request and record models."""
+"""P1 Benchmark Orchestrator request and evidence-record models."""
 
 from datetime import datetime
 from typing import Annotated, Literal
@@ -9,6 +9,7 @@ from lowvram.models.base import StrictModel
 from lowvram.models.benchmark import BenchmarkResult
 from lowvram.models.command import LlamaCppCommand
 from lowvram.models.detection import LlamaCppDetectionResult
+from lowvram.models.failure import FailureClassificationResult
 from lowvram.models.hardware import HardwareInfo
 from lowvram.models.memory import RamMonitorResult
 from lowvram.models.model import ModelInfo
@@ -23,7 +24,7 @@ FiniteNonNegativeFloat = Annotated[float, Field(ge=0, allow_inf_nan=False)]
 
 
 class BenchmarkOrchestratorRequest(StrictModel):
-    """Inputs needed to run one P1-10 llama.cpp benchmark attempt."""
+    """Inputs needed to run one llama.cpp benchmark attempt."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -45,11 +46,11 @@ class BenchmarkOrchestratorRequest(StrictModel):
 
 
 class BenchmarkOrchestrationRecord(StrictModel):
-    """Serializable evidence record produced by one P1-10 orchestration attempt."""
+    """Serializable P1 evidence record for one orchestration attempt."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal["p1.10.0"] = "p1.10.0"
+    schema_version: Literal["p1.11.0"] = "p1.11.0"
     run_id: str = Field(min_length=1)
     timestamp: datetime
     hardware: HardwareInfo | None = None
@@ -66,13 +67,27 @@ class BenchmarkOrchestrationRecord(StrictModel):
     vram: VramMonitorResult | None = None
     performance: LlamaCppTimingMetrics | None = None
 
+    failure_classification: FailureClassificationResult | None = None
     result: BenchmarkResult
 
     @model_validator(mode="after")
-    def validate_success_evidence(self) -> "BenchmarkOrchestrationRecord":
-        """Require complete evidence for successful orchestration records."""
+    def validate_evidence(self) -> "BenchmarkOrchestrationRecord":
+        """Require success evidence or a matching structured failure classification."""
         if not self.result.success:
+            if self.failure_classification is None:
+                raise ValueError("failed orchestration requires failure_classification")
+            if self.result.error_type != self.failure_classification.error_type:
+                raise ValueError(
+                    "result.error_type must match failure_classification.error_type"
+                )
+            if self.result.error_message != self.failure_classification.message:
+                raise ValueError(
+                    "result.error_message must match failure_classification.message"
+                )
             return self
+
+        if self.failure_classification is not None:
+            raise ValueError("successful orchestration cannot include failure_classification")
 
         required = {
             "hardware": self.hardware,

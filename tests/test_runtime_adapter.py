@@ -388,3 +388,21 @@ def test_spawn_error_is_structured_before_session_exists(monkeypatch) -> None:
 
     assert raised.value.error_type == ErrorType.RUNTIME_NOT_FOUND
     assert "missing-llama-cli" in raised.value.message
+
+
+def test_spawn_enomem_is_classified_as_out_of_memory(monkeypatch) -> None:
+    monkeypatch.setattr(
+        runtime_adapter.subprocess,
+        "Popen",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            OSError(errno.ENOMEM, "cannot allocate memory")
+        ),
+    )
+
+    with pytest.raises(runtime_adapter.RuntimeSpawnError) as raised:
+        LlamaCppRuntimeAdapter().spawn(
+            RuntimeExecutionRequest(executable="llama-cli")
+        )
+
+    assert raised.value.error_type == ErrorType.OUT_OF_MEMORY
+    assert "memory exhaustion" in raised.value.message
