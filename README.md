@@ -61,8 +61,8 @@ lowvram validate tests/fixtures/valid/01_dense_single_gpu_success.json
 
 ## Not implemented yet
 
-Real benchmark seed generation, recommendation logic, aggregation, Web UI, and model
-downloading remain later work.
+P1-15 real-seed validation is being finalized. Recommendation logic, aggregation, Web UI,
+and model downloading remain later work.
 
 ## Fixed units
 
@@ -70,4 +70,4 @@ downloading remain later work.
 - duration: seconds
 - throughput: tokens/sec
 
-See `docs/run-logging.md` for P1-14.
+See `docs/p1-15-real-seed.md` for the P1 final real-seed gate.

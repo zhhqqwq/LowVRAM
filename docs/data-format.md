@@ -29,10 +29,26 @@ For MoE, `parameter_count` is the total parameter count and `active_parameter_co
 
 A benchmark contains `schema_version`, `run_id`, `timestamp`, `hardware`, `model`, `runtime`, `configuration`, `memory`, `performance`, `result`, and `verification`.
 
-Successful runs require all P0 metrics: peak VRAM, peak RAM, load time, prompt throughput, and generation throughput. Failed runs are first-class records: partial metrics may be null, but `result.error_type` is required. This avoids fabricating zero-valued measurements for failures that occur before a metric can be observed.
+Successful runs record peak VRAM, peak RAM, prompt throughput, and generation throughput. P1-15 clarifies that load time is nullable when the selected runtime format does not expose a separately attributable model-load measurement. Failed runs are first-class records: partial metrics may be null, but `result.error_type` is required. This avoids fabricating zero-valued measurements for failures that occur before a metric can be observed.
 
 `configuration.model_id` must equal `model.id`, and `configuration.runtime` must equal `runtime.name`.
 
 ## Recipe
 
 A recipe records `model_id`, `runtime`, `context_length`, `gpu_layers`, `kv_cache_type`, `threads`, `batch_size`, and `extra_args`. P0 defines the contract only; it does not construct or execute a llama.cpp command.
+
+
+## P1-15 Benchmark contract update
+
+P1-15 adds `prompt_version` to every public Benchmark record so performance cannot be
+detached from the fixed workload identity. The Benchmark schema version is now `1.1.0`.
+
+Successful exported Benchmark records use only directly observed values:
+
+- `load_time_seconds` records a directly exposed llama.cpp model-load value when available; current compact CLI timing leaves it `null` instead of substituting total process duration;
+- `peak_ram_mb` comes from the target process-tree RAM peak;
+- CPU-only runs record `peak_vram_mb=0`;
+- NVIDIA runs require attributable process VRAM before a successful public record is emitted.
+
+Local executable/model paths stay in private `runs/<run_id>/` evidence and are intentionally
+omitted from the public Benchmark contract.

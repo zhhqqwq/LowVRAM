@@ -9,6 +9,7 @@ from pydantic import Field, model_validator
 from lowvram.models.base import NonNegativeFloat, NonNegativeInt, StrictModel
 from lowvram.models.hardware import HardwareInfo
 from lowvram.models.model import ModelInfo
+from lowvram.models.prompt import PromptVersion
 from lowvram.models.recipe import Recipe
 
 
@@ -76,12 +77,13 @@ class VerificationInfo(StrictModel):
 class BenchmarkRun(StrictModel):
     """Self-contained benchmark record supporting both success and failure runs."""
 
-    schema_version: Literal["1.0.0"] = "1.0.0"
+    schema_version: Literal["1.1.0"] = "1.1.0"
     run_id: str = Field(min_length=1)
     timestamp: datetime
     hardware: HardwareInfo
     model: ModelInfo
     runtime: RuntimeInfo
+    prompt_version: PromptVersion
     configuration: Recipe
     memory: MemoryMetrics
     performance: PerformanceMetrics
@@ -90,7 +92,7 @@ class BenchmarkRun(StrictModel):
 
     @model_validator(mode="after")
     def validate_cross_field_contract(self) -> "BenchmarkRun":
-        """Require complete metrics for success and consistent model/runtime references."""
+        """Require observable success metrics and consistent model/runtime references."""
         if self.configuration.model_id != self.model.id:
             raise ValueError("configuration.model_id must match model.id")
         if self.configuration.runtime != self.runtime.name:
@@ -100,7 +102,6 @@ class BenchmarkRun(StrictModel):
             required_metrics = {
                 "memory.peak_vram_mb": self.memory.peak_vram_mb,
                 "memory.peak_ram_mb": self.memory.peak_ram_mb,
-                "performance.load_time_seconds": self.performance.load_time_seconds,
                 "performance.prompt_tokens_per_second": self.performance.prompt_tokens_per_second,
                 "performance.generation_tokens_per_second": (
                     self.performance.generation_tokens_per_second

@@ -21,3 +21,21 @@ Do not manually alter measured performance or memory values to make a run appear
 ## P0 limitation
 
 P0 fixtures are synthetic contract examples, not real performance claims. Runtime execution, monitoring, parsing, standard prompts, and verified benchmark generation belong to P1.
+
+
+## P1-15 metric provenance
+
+P1-15 resolves the `load_time_seconds` contract by recording a directly exposed llama.cpp
+model-load value when the selected timing format provides one. llama-cli b10336 emits only a
+compact Prompt/Generation throughput summary, so its successful records keep
+`load_time_seconds=null`. Total process duration must not be substituted for model load time.
+
+The output parser supports both detailed `prompt eval time / eval time` blocks and the
+b10336-style compact `[ Prompt: X t/s | Generation: Y t/s ]` line. Compact output does not
+fabricate prompt/eval duration fields.
+
+Public Benchmark export uses process-tree peak RAM. CPU-only runs have an observed VRAM peak
+of zero. On NVIDIA systems, a successful public Benchmark requires process-attributed VRAM;
+whole-GPU desktop/background usage is not substituted when attribution is unavailable.
+
+Every exported P1-15 Benchmark records `prompt_version`.

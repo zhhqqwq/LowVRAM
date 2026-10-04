@@ -1,6 +1,6 @@
 """P1 llama.cpp timing parser models."""
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import ConfigDict, Field, model_validator
 
@@ -11,14 +11,33 @@ PositiveFiniteFloat = Annotated[float, Field(gt=0, allow_inf_nan=False)]
 
 
 class LlamaCppTimingMetrics(StrictModel):
-    """Four timing metrics parsed directly from one complete llama.cpp timing block."""
+    """Timing metrics parsed directly from one supported llama.cpp timing format."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    prompt_eval_time_seconds: PositiveFiniteFloat
+    timing_format: Literal["detailed", "compact"] = "detailed"
+    load_time_seconds: PositiveFiniteFloat | None = None
+    prompt_eval_time_seconds: PositiveFiniteFloat | None = None
     prompt_tokens_per_second: PositiveFiniteFloat
-    eval_time_seconds: PositiveFiniteFloat
+    eval_time_seconds: PositiveFiniteFloat | None = None
     generation_tokens_per_second: PositiveFiniteFloat
+
+    @model_validator(mode="after")
+    def validate_timing_format(self) -> "LlamaCppTimingMetrics":
+        """Do not fabricate duration fields that a timing format does not expose."""
+        if self.timing_format == "detailed":
+            if self.prompt_eval_time_seconds is None or self.eval_time_seconds is None:
+                raise ValueError(
+                    "detailed timing format requires prompt_eval_time_seconds "
+                    "and eval_time_seconds"
+                )
+            return self
+
+        if self.prompt_eval_time_seconds is not None or self.eval_time_seconds is not None:
+            raise ValueError(
+                "compact timing format cannot include unreported prompt/eval durations"
+            )
+        return self
 
 
 class LlamaCppOutputParseResult(StrictModel):
