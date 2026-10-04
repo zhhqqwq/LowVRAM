@@ -34,6 +34,9 @@ lowvram = "lowvram.cli:app"
 [tool.setuptools.packages.find]
 include = ["lowvram*"]
 
+[tool.setuptools.data-files]
+"share/lowvram/benchmark_prompts" = ["benchmark_prompts/v1.txt"]
+
 [tool.pytest.ini_options]
 addopts = "-ra --strict-markers --strict-config"
 testpaths = ["tests"]

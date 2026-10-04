@@ -1,0 +1,31 @@
+LowVRAM Benchmark Prompt v1
+
+Use only the information in this prompt. Do not use external tools, web searches, personal data, or unstated facts.
+
+A research station has four independent rooms: North, East, South, and West. Each room contains a temperature sensor, a small battery, and a local controller. At the start of the test, all rooms are isolated from one another. The controller in each room records one integer reading every minute for twelve minutes. The readings are synthetic and are listed below.
+
+North: 18, 19, 21, 20, 22, 23, 24, 22, 21, 20, 19, 18
+East:  25, 24, 23, 22, 21, 20, 19, 20, 21, 22, 23, 24
+South: 14, 15, 15, 16, 17, 18, 18, 17, 16, 15, 15, 14
+West:  30, 28, 27, 29, 31, 32, 30, 29, 28, 27, 26, 25
+
+The battery controller follows the same fictional rule in every room. It begins with a charge level of 50 units. For each reading above 22, subtract 2 units. For each reading below 18, add 1 unit. Readings from 18 through 22 inclusive do not change the charge. The charge level is allowed to move freely for this exercise; there are no minimum or maximum bounds.
+
+For a separate text-processing check, consider these six labels in their given order:
+
+amber, birch, cobalt, delta, ember, frost
+
+Assign each label its one-based position: amber=1, birch=2, cobalt=3, delta=4, ember=5, frost=6. Multiply each position by the number of letters in its label. Keep the results in the original label order.
+
+Complete all of the following tasks using only the data and rules above:
+
+1. For each room, report the minimum reading, maximum reading, and arithmetic mean of the twelve readings.
+2. For each room, compute the final battery charge after all twelve readings.
+3. Identify which room or rooms have the largest reading range, where range means maximum minus minimum.
+4. For the six labels, report the six position-times-length products in order and their total.
+5. Write a short comparison of the four rooms in no more than 120 words. The comparison must mention one numerical fact about every room.
+6. Finish with exactly one line in this form:
+CHECKSUM: N-E-S-W-T
+where N, E, S, and W are the final battery charges for North, East, South, and West, and T is the total from the label calculation.
+
+Return the answer as plain text with clear section headings. Do not invent measurements, do not change the rules, and do not refer to information outside this prompt.
