@@ -1,5 +1,6 @@
 """Runtime adapter abstraction and subprocess implementation."""
 
+import errno
 import subprocess
 import time
 from abc import ABC, abstractmethod
@@ -10,6 +11,18 @@ from lowvram.models.benchmark import ErrorType
 from lowvram.models.runtime import RuntimeExecutionRequest, RuntimeExecutionResult
 
 _TERMINATION_ERRORS = (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess)
+_RUNTIME_UNAVAILABLE_ERRNOS = {
+    errno.ENOENT,
+    errno.ENOTDIR,
+    errno.EACCES,
+    errno.ENOEXEC,
+}
+_RUNTIME_UNAVAILABLE_WINERRORS = {
+    2,    # ERROR_FILE_NOT_FOUND
+    3,    # ERROR_PATH_NOT_FOUND
+    5,    # ERROR_ACCESS_DENIED
+    193,  # ERROR_BAD_EXE_FORMAT
+}
 
 
 class RuntimeAdapter(ABC):
@@ -51,18 +64,14 @@ class SubprocessRuntimeAdapter(RuntimeAdapter):
                 errors="replace",
                 shell=False,
             )
-        except FileNotFoundError:
-            return RuntimeExecutionResult(
-                runtime_name=self.runtime_name,
-                success=False,
-                exit_code=None,
-                stdout="",
-                stderr="",
-                duration_seconds=time.monotonic() - started_at,
-                error_type=ErrorType.RUNTIME_NOT_FOUND,
-                error_message=f"runtime executable not found: {request.executable}",
-            )
         except OSError as exc:
+            error_type = _classify_start_error(exc)
+            if error_type == ErrorType.RUNTIME_NOT_FOUND:
+                error_message = (
+                    f"runtime executable unavailable: {request.executable}: {exc}"
+                )
+            else:
+                error_message = f"runtime process could not be started: {exc}"
             return RuntimeExecutionResult(
                 runtime_name=self.runtime_name,
                 success=False,
@@ -70,14 +79,15 @@ class SubprocessRuntimeAdapter(RuntimeAdapter):
                 stdout="",
                 stderr="",
                 duration_seconds=time.monotonic() - started_at,
-                error_type=ErrorType.RUNTIME_NOT_FOUND,
-                error_message=f"runtime executable could not be started: {exc}",
+                error_type=error_type,
+                error_message=error_message,
             )
 
         try:
             stdout, stderr = process.communicate(timeout=request.timeout_seconds)
         except subprocess.TimeoutExpired:
             _terminate_process_tree(process.pid)
+            _kill_root_fallback(process)
             stdout, stderr = process.communicate()
             return RuntimeExecutionResult(
                 runtime_name=self.runtime_name,
@@ -113,6 +123,28 @@ class SubprocessRuntimeAdapter(RuntimeAdapter):
             error_type=ErrorType.PROCESS_CRASH,
             error_message=f"runtime process exited with code {process.returncode}",
         )
+
+
+def _classify_start_error(exc: OSError) -> ErrorType:
+    """Separate unavailable executables from unrelated OS-level start failures."""
+    winerror = getattr(exc, "winerror", None)
+    if (
+        isinstance(exc, FileNotFoundError | PermissionError)
+        or exc.errno in _RUNTIME_UNAVAILABLE_ERRNOS
+        or winerror in _RUNTIME_UNAVAILABLE_WINERRORS
+    ):
+        return ErrorType.RUNTIME_NOT_FOUND
+    return ErrorType.UNKNOWN
+
+
+def _kill_root_fallback(process: subprocess.Popen[str]) -> None:
+    """Ensure the direct child is killed even when psutil tree handling cannot reach it."""
+    if process.poll() is not None:
+        return
+    try:
+        process.kill()
+    except OSError:
+        return
 
 
 def _terminate_process_tree(root_pid: int) -> None:
