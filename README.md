@@ -13,9 +13,7 @@ python -m pip install -e ".[dev]"
 lowvram system
 ```
 
-The command outputs structured JSON containing OS, CPU, RAM, NVIDIA GPU/VRAM, NVIDIA driver, CUDA compatibility version, and Python version. Machines without a usable NVIDIA installation remain valid and return `gpu: []`.
-
-P1-02 adds a reusable one-shot NVIDIA state API:
+P1-02 provides one-shot NVIDIA state snapshots:
 
 ```python
 from lowvram.collectors import collect_nvidia_snapshot
@@ -23,7 +21,17 @@ from lowvram.collectors import collect_nvidia_snapshot
 snapshot = collect_nvidia_snapshot()
 ```
 
-It captures GPU index/name, total and used VRAM, GPU utilization, NVIDIA driver, and CUDA compatibility version. It is a snapshot only; continuous VRAM monitoring remains later P1 work.
+P1-03 adds target-process RAM monitoring:
+
+```python
+from lowvram.collectors import RamMonitor
+
+monitor = RamMonitor(pid)
+monitor.start()
+result = monitor.stop()
+```
+
+The RAM monitor samples every 100 ms, follows recursively discovered child processes, and records baseline/current/peak/delta for both process-tree RSS and whole-system used RAM.
 
 P0 also provides strict data contracts and validation:
 
@@ -35,17 +43,18 @@ lowvram validate tests/fixtures/valid/01_dense_single_gpu_success.json
 ## Implemented
 
 - Python 3.11+ package and Typer CLI
-- Strict Pydantic v2 P0 models and JSON Schema Draft 2020-12 contracts
+- strict Pydantic v2 P0 models and JSON Schema Draft 2020-12 contracts
 - `lowvram validate <file>`
 - `lowvram system`
 - one-shot NVIDIA status snapshots
+- target-process RAM monitoring with child-process tracking
 - valid/invalid benchmark fixtures and automated tests
 - Ruff, mypy, pytest, and GitHub Actions CI
-- P0, system-collector, and NVIDIA-collector documentation
+- P0 plus P1 collector/monitor documentation
 
 ## Not implemented yet
 
-Benchmark execution, llama.cpp runtime integration, continuous process RAM/VRAM monitoring, performance parsing, recommendation logic, aggregation, Web UI, and model downloading remain later work.
+Benchmark execution, llama.cpp runtime integration, VRAM time-series monitoring, performance parsing, recommendation logic, aggregation, Web UI, and model downloading remain later work.
 
 ## Fixed units
 
@@ -53,4 +62,4 @@ Benchmark execution, llama.cpp runtime integration, continuous process RAM/VRAM 
 - duration: seconds
 - throughput: tokens/sec
 
-See `docs/data-format.md`, `docs/system-collector.md`, and `docs/nvidia-collector.md`.
+See `docs/data-format.md`, `docs/system-collector.md`, `docs/nvidia-collector.md`, and `docs/ram-monitor.md`.

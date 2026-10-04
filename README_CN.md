@@ -4,24 +4,24 @@ LowVRAM 是一个面向消费级硬件的开放本地 AI 模型兼容性数据�
 
 **P0 — Foundation 已完成，当前处于 P1 — Benchmark Runner。**
 
-P1-01 已提供：
+当前 P1 已实现：
 
-```bash
-lowvram system
-```
+- P1-01：`lowvram system` 本机硬件采集
+- P1-02：一次性 NVIDIA GPU 状态快照
+- P1-03：目标进程及递归子进程 RAM Monitor
 
-用于输出 OS、CPU、RAM、NVIDIA GPU/总 VRAM、Driver、CUDA 兼容版本和 Python Version。
-
-P1-02 新增一次性 NVIDIA 状态快照接口：
+P1-03 使用：
 
 ```python
-from lowvram.collectors import collect_nvidia_snapshot
+from lowvram.collectors import RamMonitor
 
-snapshot = collect_nvidia_snapshot()
+monitor = RamMonitor(pid)
+monitor.start()
+result = monitor.stop()
 ```
 
-快照包含 GPU index、名称、总 VRAM、已用 VRAM、GPU 利用率、NVIDIA Driver 和 CUDA 兼容版本。没有 NVIDIA 或 `nvidia-smi` 查询失败时返回空 GPU 列表；不伪造测量值。
+第一版固定每 100ms 采样一次。进程 RAM 按目标进程及已发现子进程的 RSS 求和；系统 RAM 使用当前整机已用物理内存。
 
-P1-02 不进行循环采样，不计算 baseline、peak 或 delta VRAM；这些属于后续 P1-04 VRAM Monitor。
+结果记录 process/system 两组 baseline、current、peak、delta，其中 `peak_process_ram_mb` 和 `peak_system_ram_mb` 对应 P1-03 的核心输出。
 
-当前仍未实现 llama.cpp 调用、持续 RAM/VRAM 监控、Benchmark 编排、推荐器、数据库聚合和 Web UI。
+当前仍未实现 P1-04 VRAM 持续监控、llama.cpp 调用和 Benchmark 编排。
