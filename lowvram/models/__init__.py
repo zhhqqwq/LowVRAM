@@ -1,6 +1,7 @@
 """Public LowVRAM data models."""
 
 from lowvram.models.benchmark import BenchmarkRun
+from lowvram.models.command import LlamaCppCommand, LlamaCppCommandRequest
 from lowvram.models.detection import LlamaCppDetectionResult
 from lowvram.models.hardware import HardwareInfo
 from lowvram.models.memory import RamMonitorResult, RamSample
@@ -13,6 +14,8 @@ from lowvram.models.vram import VramGPUResult, VramGPUUsage, VramMonitorResult, 
 __all__ = [
     "BenchmarkRun",
     "HardwareInfo",
+    "LlamaCppCommand",
+    "LlamaCppCommandRequest",
     "LlamaCppDetectionResult",
     "ModelInfo",
     "NvidiaGPUStatus",

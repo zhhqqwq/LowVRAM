@@ -7,19 +7,30 @@ LowVRAM is an open local-AI model compatibility database for consumer hardware. 
 ## Current capability
 
 P1-01 through P1-04 provide hardware inventory plus RAM/VRAM measurement. P1-05 provides the
-external process execution boundary. P1-06 adds llama.cpp executable discovery and version
-probing:
+external process execution boundary. P1-06 discovers and version-probes llama.cpp. P1-07
+builds deterministic llama.cpp argv:
 
 ```python
-from lowvram.runtime import detect_llama_cpp
+from lowvram.models import LlamaCppCommandRequest
+from lowvram.runtime import build_llama_cpp_command
 
-detected = detect_llama_cpp()
+command = build_llama_cpp_command(
+    LlamaCppCommandRequest(
+        executable="/path/to/llama-cli",
+        model_path="/path/to/model.gguf",
+        context_length=4096,
+        threads=8,
+        gpu_layers=32,
+        batch_size=512,
+        temperature=0.8,
+        seed=42,
+    )
+)
 ```
 
-Detection supports an explicit executable path or PATH search, prefers modern `llama-cli`,
-supports legacy `main`, covers Windows/Linux executable names, and probes `--version`
-then `version`. A detected runtime is verification-eligible only when its version can be
-recognized.
+The builder records the complete actual argv, preserves paths as single arguments, supports
+CPU-only `gpu_layers=0`, and rejects `extra_args` that would silently override managed
+benchmark parameters.
 
 P0 also provides strict data contracts and validation:
 
@@ -37,15 +48,14 @@ lowvram validate tests/fixtures/valid/01_dense_single_gpu_success.json
 - hardware/NVIDIA collection plus RAM/VRAM monitoring
 - shell-free runtime adapter abstraction
 - llama.cpp explicit-path/PATH discovery and version detection
+- deterministic llama.cpp command building
 - valid/invalid benchmark fixtures and automated tests
 - Ruff, mypy, pytest, and GitHub Actions CI
-- P0 plus P1 collector/monitor/runtime documentation
 
 ## Not implemented yet
 
-Recipe-to-llama.cpp command translation, standard benchmark prompt, performance parsing,
-benchmark orchestration, recommendation logic, aggregation, Web UI, and model downloading
-remain later work.
+Standard benchmark prompt, performance parsing, benchmark orchestration, recommendation
+logic, aggregation, Web UI, and model downloading remain later work.
 
 ## Fixed units
 
@@ -53,4 +63,4 @@ remain later work.
 - duration: seconds
 - throughput: tokens/sec
 
-See `docs/runtime-adapter.md` and `docs/llama-cpp-detector.md`.
+See `docs/llama-cpp-command-builder.md` for P1-07.
