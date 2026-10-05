@@ -2,6 +2,10 @@
 
 P1-15 is the final P1 truthfulness gate.
 
+The developer-controlled consumer-hardware run is governed by the normative
+[P1 Final Consumer Hardware Acceptance Execution Policy](p1-final-consumer-hardware-execution-policy.md).
+The acceptance must stop rather than expand access beyond that policy.
+
 ## Required matrix
 
 The automated real-seed workflow executes ten attempts with real llama.cpp and real GGUF
